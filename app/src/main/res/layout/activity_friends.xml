@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="58dp"
+        android:gravity="center_vertical"
+        android:paddingStart="14dp"
+        android:paddingEnd="10dp">
+
+        <TextView
+            style="@style/Title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Friends" />
+
+        <ImageView
+            android:id="@+id/searchButton"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/circle_soft"
+            android:contentDescription="Search"
+            android:padding="9dp"
+            android:src="@drawable/ic_search" />
+
+        <ImageView
+            android:id="@+id/chatsButton"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:background="@drawable/circle_soft"
+            android:contentDescription="Chats"
+            android:padding="9dp"
+            android:src="@drawable/ic_chat" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:background="@color/white">
+
+        <ImageView
+            android:id="@+id/homeTab"
+            style="@style/Tab"
+            android:contentDescription="Home"
+            android:src="@drawable/ic_home" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_friends"
+                android:tint="@color/primary" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="2dp"
+                android:layout_marginTop="9dp"
+                android:background="@color/primary" />
+
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/marketTab"
+            style="@style/Tab"
+            android:contentDescription="Marketplace"
+            android:src="@drawable/ic_marketplace" />
+
+        <ImageView
+            android:id="@+id/notificationsTab"
+            style="@style/Tab"
+            android:contentDescription="Notifications"
+            android:src="@drawable/ic_notifications" />
+
+        <ImageView
+            android:id="@+id/menuTab"
+            style="@style/Tab"
+            android:contentDescription="Menu"
+            android:src="@drawable/ic_menu" />
+
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="14dp"
+            android:paddingBottom="18dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/suggestionsTab"
+                    style="@style/Heading"
+                    android:layout_width="92dp"
+                    android:layout_height="34dp"
+                    android:background="@drawable/rounded_soft"
+                    android:gravity="center"
+                    android:text="Suggestions"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/yourFriendsTab"
+                    style="@style/Heading"
+                    android:layout_width="96dp"
+                    android:layout_height="34dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/rounded_soft"
+                    android:gravity="center"
+                    android:text="Your friends"
+                    android:textSize="11sp" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="42dp"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/friendRequestCount"
+                    style="@style/Heading"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Friend requests 0"
+                    android:textSize="15sp" />
+
+                <TextView
+                    style="@style/Heading"
+                    android:id="@+id/seeAllFriends"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="See all"
+                    android:textColor="@color/primary"
+                    android:textSize="11sp" />
+
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/friendsSectionTitle"
+                style="@style/Title"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:gravity="center_vertical"
+                android:text="Friend requests"
+                android:textSize="18sp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/friendsRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToPadding="false"
+                android:paddingBottom="12dp" />
+
+        </LinearLayout>
+
+    </ScrollView>
+
+</LinearLayout>

@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/black">
+
+    <ImageView
+        android:id="@+id/storyPreview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_margin="8dp"
+        android:scaleType="centerCrop"
+        android:src="@drawable/landscape" />
+
+    <ImageView
+        android:id="@+id/backButton"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="14dp"
+        android:layout_marginTop="16dp"
+        android:background="@drawable/circle_dark"
+        android:contentDescription="Close"
+        android:padding="11dp"
+        android:src="@drawable/ic_close"
+        android:tint="@color/white" />
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="52dp"
+        android:layout_alignParentEnd="true"
+        android:layout_marginTop="12dp"
+        android:layout_marginEnd="12dp"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:background="@drawable/circle_dark"
+            android:contentDescription="Tag people"
+            android:padding="10dp"
+            android:src="@drawable/ic_person_add"
+            android:tint="@color/white" />
+
+        <TextView
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/circle_dark"
+            android:gravity="center"
+            android:text="Aa"
+            android:textColor="@color/white"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/circle_dark"
+            android:contentDescription="Sticker"
+            android:padding="10dp"
+            android:src="@drawable/ic_smile"
+            android:tint="@color/white" />
+
+        <ImageView
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/circle_dark"
+            android:contentDescription="Music"
+            android:padding="10dp"
+            android:src="@drawable/ic_music"
+            android:tint="@color/white" />
+
+        <ImageView
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/circle_dark"
+            android:contentDescription="Effects"
+            android:padding="10dp"
+            android:src="@drawable/ic_star"
+            android:tint="@color/white" />
+
+    </LinearLayout>
+
+    <EditText
+        android:id="@+id/storyLabelInput"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:background="@drawable/rounded_red"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="8dp"
+        android:rotation="4"
+        android:hint="Add a story label"
+        android:inputType="textCapSentences"
+        android:text=""
+        android:textColor="@color/white"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="78dp"
+        android:layout_alignParentBottom="true"
+        android:background="#CC000000"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="12dp">
+
+        <LinearLayout
+            android:id="@+id/shareStoryButton"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="@drawable/rounded_dark"
+            android:gravity="center"
+            android:paddingHorizontal="8dp">
+
+            <TextView
+                style="@style/Avatar"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:text="JW"
+                android:textSize="8sp" />
+
+            <TextView
+                style="@style/Heading"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="7dp"
+                android:text="Your story"
+                android:textColor="@color/white"
+                android:textSize="11sp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/shareCloseFriendsButton"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1.15"
+            android:background="@drawable/rounded_dark"
+            android:gravity="center"
+            android:paddingHorizontal="8dp">
+
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:background="@drawable/circle_green"
+                android:padding="7dp"
+                android:src="@drawable/ic_star"
+                android:tint="@color/white" />
+
+            <TextView
+                style="@style/Heading"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="7dp"
+                android:text="Close friends"
+                android:textColor="@color/white"
+                android:textSize="11sp" />
+
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/storyContinueButton"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:layout_marginStart="9dp"
+            android:background="@drawable/circle_teal"
+            android:contentDescription="Continue"
+            android:padding="13dp"
+            android:src="@drawable/ic_send"
+            android:tint="@color/white" />
+
+    </LinearLayout>
+
+</RelativeLayout>

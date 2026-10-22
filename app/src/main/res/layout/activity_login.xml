@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/screen_background"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:minHeight="700dp"
+        android:orientation="vertical"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="18dp"
+        android:paddingBottom="18dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:gravity="center">
+
+            <TextView
+                style="@style/Meta"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="English (UK)" />
+
+            <ImageView
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginStart="4dp"
+                android:contentDescription="Choose language"
+                android:src="@drawable/ic_chevron_down"
+                android:tint="@color/text_secondary" />
+
+        </LinearLayout>
+
+        <ImageView
+            android:layout_width="78dp"
+            android:layout_height="78dp"
+            android:layout_gravity="center"
+            android:layout_marginTop="28dp"
+            android:background="@drawable/rounded_teal"
+            android:contentDescription="Kinnect"
+            android:padding="14dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/logo" />
+
+        <TextView
+            style="@style/Meta"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="32dp"
+            android:letterSpacing="0.08"
+            android:text="RECENT LOGIN"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:id="@+id/recentLoginCard"
+            android:layout_width="match_parent"
+            android:layout_height="72dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/rounded_white"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="12dp">
+
+            <TextView
+                style="@style/Avatar"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:text="JW" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/Heading"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:id="@+id/recentLoginName"
+                    android:text="Recent account" />
+
+                <TextView
+                    style="@style/Meta"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="Tap to log in" />
+
+            </LinearLayout>
+
+            <ImageView
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:contentDescription="More"
+                android:padding="6dp"
+                android:src="@drawable/ic_more" />
+
+        </LinearLayout>
+
+        <EditText
+            android:id="@+id/emailInput"
+            style="@style/Input"
+            android:layout_width="match_parent"
+            android:layout_height="58dp"
+            android:layout_marginTop="20dp"
+            android:hint="Mobile number or email"
+            android:inputType="textEmailAddress"
+            android:text="" />
+
+        <EditText
+            android:id="@+id/passwordInput"
+            style="@style/Input"
+            android:layout_width="match_parent"
+            android:layout_height="58dp"
+            android:layout_marginTop="10dp"
+            android:drawableEnd="@drawable/ic_visibility"
+            android:drawablePadding="8dp"
+            android:hint="Password"
+            android:inputType="textPassword"
+            android:text="" />
+
+        <Button
+            android:id="@+id/loginButton"
+            style="@style/TealButton"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginTop="11dp"
+            android:text="Log in" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:gravity="center"
+            android:text="Forgot password?"
+            android:textColor="@color/primary"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <Space
+            android:layout_width="1dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <Button
+            android:id="@+id/signupButton"
+            style="@style/LightButton"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:background="@drawable/outline_teal"
+            android:text="Create new account"
+            android:textColor="@color/primary"
+            android:textStyle="bold" />
+
+        <TextView
+            style="@style/Meta"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:gravity="center"
+            android:text="Kinnect · from SMD" />
+
+    </LinearLayout>
+
+</ScrollView>

@@ -1,0 +1,431 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:gravity="center_vertical"
+        android:paddingStart="5dp"
+        android:paddingEnd="7dp">
+
+        <ImageView
+            android:id="@+id/backButton"
+            android:layout_width="40dp"
+            android:layout_height="44dp"
+            android:contentDescription="Back"
+            android:padding="10dp"
+            android:src="@drawable/ic_back"
+            android:tint="@color/primary" />
+
+        <TextView
+            android:id="@+id/chatToolbarAvatar"
+            style="@style/Avatar"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/circle_red"
+            android:text=""
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/chatToolbarName"
+                style="@style/Heading"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Kinnect member" />
+
+            <TextView
+                android:id="@+id/chatToolbarStatus"
+                style="@style/Meta"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="" />
+
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/callButton"
+            android:layout_width="44dp"
+            android:layout_height="46dp"
+            android:contentDescription="Voice call"
+            android:padding="10dp"
+            android:src="@drawable/ic_phone"
+            android:tint="@color/primary" />
+
+        <ImageView
+            android:id="@+id/videoCallButton"
+            android:layout_width="38dp"
+            android:layout_height="42dp"
+            android:contentDescription="Video call"
+            android:padding="9dp"
+            android:src="@drawable/ic_video"
+            android:tint="@color/primary" />
+
+        <ImageView
+            android:id="@+id/chatInfoButton"
+            android:layout_width="38dp"
+            android:layout_height="42dp"
+            android:contentDescription="Information"
+            android:padding="9dp"
+            android:src="@drawable/ic_info"
+            android:tint="@color/primary" />
+
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider" />
+
+    <ScrollView
+        android:id="@+id/sampleChatScroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="620dp"
+            android:orientation="vertical"
+            android:paddingHorizontal="12dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="8dp">
+
+            <TextView
+                android:id="@+id/chatProfileAvatar"
+                style="@style/Avatar"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
+                android:layout_gravity="center"
+                android:background="@drawable/circle_red"
+                android:text="AK"
+                android:textSize="19sp" />
+
+            <TextView
+                android:id="@+id/chatProfileName"
+                style="@style/Heading"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="9dp"
+                android:gravity="center"
+                android:text="Kinnect member"
+                android:textSize="17sp" />
+
+            <TextView
+                android:id="@+id/chatProfileSubtitle"
+                style="@style/Meta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:text="You’re friends on Kinnect · Lives in Karachi" />
+
+            <TextView
+                style="@style/Meta"
+                android:layout_width="match_parent"
+                android:layout_height="34dp"
+                android:gravity="center"
+                android:text="TODAY 4:49 PM"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/chatMessageAvatar"
+                    style="@style/Avatar"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:background="@drawable/circle_red"
+                    android:text="AK"
+                    android:textSize="8sp" />
+
+                <TextView
+                    android:id="@+id/incomingMessageOne"
+                    style="@style/Body"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/rounded_soft"
+                    android:padding="12dp"
+                    android:text="Hey! Are you still coming Saturday?" />
+
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/incomingMessageTwo"
+                style="@style/Body"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="40dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/rounded_soft"
+                android:padding="12dp"
+                android:text="Lina booked the table for 8" />
+
+            <TextView
+                android:id="@+id/incomingMessageThree"
+                style="@style/Body"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="40dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/rounded_soft"
+                android:padding="12dp"
+                android:text="Bring the camera" />
+
+            <TextView
+                android:id="@+id/outgoingMessageOne"
+                style="@style/Body"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/rounded_teal"
+                android:padding="12dp"
+                android:text="Yes, obviously"
+                android:textColor="@color/white" />
+
+            <RelativeLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:layout_marginTop="5dp">
+
+                <TextView
+                    android:id="@+id/outgoingMessageTwo"
+                    style="@style/Body"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/rounded_teal"
+                    android:padding="12dp"
+                    android:text="Already charged both batteries"
+                    android:textColor="@color/white" />
+
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_alignParentStart="true"
+                    android:layout_alignParentBottom="true"
+                    android:layout_marginStart="-9dp"
+                    android:layout_marginBottom="-8dp"
+                    android:src="@drawable/reaction_love" />
+
+            </RelativeLayout>
+
+            <TextView
+                android:id="@+id/sampleChatReplyLabel"
+                style="@style/Meta"
+                android:layout_width="match_parent"
+                android:layout_height="30dp"
+                android:gravity="end|center_vertical"
+                android:text="You replied to Aisha" />
+
+            <TextView
+                android:id="@+id/quotedMessage"
+                style="@style/Body"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:background="@drawable/rounded_soft"
+                android:padding="10dp"
+                android:text="Lina booked the table for 8"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/outgoingMessageThree"
+                style="@style/Body"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/rounded_teal"
+                android:padding="12dp"
+                android:text="Perfect, I’ll be there by 7:45"
+                android:textColor="@color/white" />
+
+            <ImageView
+                android:layout_width="202dp"
+                android:layout_height="144dp"
+                android:layout_gravity="end"
+                android:layout_marginTop="7dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/landscape_purple" />
+
+            <View
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:layout_gravity="end"
+                android:layout_marginTop="5dp"
+                android:background="@drawable/circle_red" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="34dp"
+                android:layout_marginTop="5dp"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/typingAvatar"
+                    style="@style/Avatar"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:background="@drawable/circle_red"
+                    android:text="AK"
+                    android:textSize="8sp" />
+
+                <LinearLayout
+                    android:layout_width="48dp"
+                    android:layout_height="28dp"
+                    android:layout_marginStart="7dp"
+                    android:background="@drawable/rounded_soft"
+                    android:gravity="center">
+
+                    <View
+                        android:layout_width="5dp"
+                        android:layout_height="5dp"
+                        android:background="@drawable/circle_dark" />
+
+                    <View
+                        android:layout_width="5dp"
+                        android:layout_height="5dp"
+                        android:layout_marginHorizontal="4dp"
+                        android:background="@drawable/circle_dark" />
+
+                    <View
+                        android:layout_width="5dp"
+                        android:layout_height="5dp"
+                        android:background="@drawable/circle_dark" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </ScrollView>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/messagesRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="8dp" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:paddingHorizontal="5dp">
+
+        <TextView
+            android:id="@+id/chatReplyLabel"
+            style="@style/Meta"
+            android:layout_width="match_parent"
+            android:layout_height="24dp"
+            android:gravity="center_vertical"
+            android:visibility="gone" />
+
+        <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="62dp"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="0dp">
+
+        <ImageView
+            android:id="@+id/chatAttachmentButton"
+            android:layout_width="34dp"
+            android:layout_height="42dp"
+            android:padding="8dp"
+            android:src="@drawable/ic_add"
+            android:tint="@color/primary" />
+
+        <ImageView
+            android:id="@+id/chatCameraButton"
+            android:layout_width="34dp"
+            android:layout_height="42dp"
+            android:padding="8dp"
+            android:src="@drawable/ic_camera"
+            android:tint="@color/primary" />
+
+        <ImageView
+            android:id="@+id/chatImageButton"
+            android:layout_width="34dp"
+            android:layout_height="42dp"
+            android:padding="8dp"
+            android:src="@drawable/ic_image"
+            android:tint="@color/primary" />
+
+        <ImageView
+            android:id="@+id/chatVoiceButton"
+            android:layout_width="34dp"
+            android:layout_height="42dp"
+            android:padding="8dp"
+            android:src="@drawable/ic_mic"
+            android:tint="@color/primary" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="46dp"
+            android:layout_marginStart="4dp"
+            android:layout_weight="1"
+            android:background="@drawable/input_pill"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="13dp">
+
+            <EditText
+                android:id="@+id/messageInput"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@null"
+                android:hint="Aa"
+                android:singleLine="true"
+                android:textSize="12sp" />
+
+            <ImageView
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:src="@drawable/ic_smile"
+                android:tint="@color/primary" />
+
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/sendMessageButton"
+            android:layout_width="38dp"
+            android:layout_height="42dp"
+            android:padding="8dp"
+            android:src="@drawable/ic_thumb_up"
+            android:tint="@color/primary" />
+
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>

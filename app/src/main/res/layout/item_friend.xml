@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="92dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="4dp">
+
+    <TextView
+        android:id="@+id/friendAvatar"
+        style="@style/Avatar"
+        android:layout_width="58dp"
+        android:layout_height="58dp"
+        android:background="@drawable/circle_purple"
+        android:textSize="17sp" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="10dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/friendName"
+            style="@style/Heading"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/friendUsername"
+            style="@style/Meta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/friendRequestActions"
+        android:layout_width="94dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <Button
+            android:id="@+id/confirmFriendRequest"
+            style="@style/TealButton"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:text="Confirm"
+            android:textSize="10sp" />
+
+        <Button
+            android:id="@+id/deleteFriendRequest"
+            style="@style/LightButton"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:layout_marginTop="3dp"
+            android:text="Delete"
+            android:textSize="10sp" />
+
+    </LinearLayout>
+
+</LinearLayout>

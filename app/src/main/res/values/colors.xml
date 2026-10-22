@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#0B5F63</color><color name="primary_dark">#074A4D</color>
+    <color name="screen_background">#F7F6F2</color><color name="card_background">#FFFFFF</color>
+    <color name="text_primary">#202124</color><color name="text_secondary">#6F716F</color>
+    <color name="divider">#E4E2DD</color><color name="input_background">#F0EFEB</color>
+    <color name="teal_pale">#DCEFEF</color><color name="red">#D94147</color>
+    <color name="orange">#D68A16</color><color name="purple">#765184</color>
+    <color name="green">#2F7359</color><color name="navy">#263448</color>
+    <color name="black">#FF000000</color><color name="white">#FFFFFFFF</color>
+    <color name="transparent">#00000000</color>
+    <color name="surface_warm">#F5F3EF</color>
+    <color name="surface_soft">#EEECE7</color>
+    <color name="teal_soft">#DCEDEE</color>
+    <color name="teal_mid">#24777A</color>
+    <color name="story_green_light">#CBDCBF</color>
+    <color name="story_green">#8CAA77</color>
+    <color name="story_green_dark">#5F8150</color>
+    <color name="story_navy">#2D3B50</color>
+    <color name="story_blue">#637895</color>
+    <color name="story_purple">#8B6A91</color>
+    <color name="story_sand">#E6CFAE</color>
+    <color name="reaction_blue">#1686A0</color>
+    <color name="reaction_pink">#D94A63</color>
+    <color name="reaction_yellow">#E5A51B</color>
+    <color name="reaction_orange">#C8502C</color>
+    <color name="overlay_dark">#99000000</color>
+</resources>
