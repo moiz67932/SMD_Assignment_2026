@@ -16,7 +16,8 @@ import com.bumptech.glide.request.transition.Transition
 object AvatarBinder {
     fun initials(name: String) = name.split(" ").mapNotNull { it.firstOrNull()?.uppercaseChar()?.toString() }.take(2).joinToString("")
 
-    fun bind(view: TextView, name: String, photoRef: String?) {
+    /** cornerRadiusDp = null draws a circle; a number draws a rounded square (e.g. friend tiles). */
+    fun bind(view: TextView, name: String, photoRef: String?, cornerRadiusDp: Float? = null) {
         // Remember the original circle drawable once, so recycled rows can go back to it.
         if (view.getTag(R.id.avatarOriginalBackground) == null) view.setTag(R.id.avatarOriginalBackground, view.background ?: Unit)
         val original = view.getTag(R.id.avatarOriginalBackground) as? Drawable
@@ -24,9 +25,13 @@ object AvatarBinder {
         view.background = original
         view.text = initials(name)
         if (photoRef.isNullOrBlank()) return
-        Glide.with(view).asBitmap().load(photoRef).circleCrop().into(object : CustomViewTarget<TextView, Bitmap>(view) {
+        val request = Glide.with(view).asBitmap().load(photoRef)
+        (if (cornerRadiusDp == null) request.circleCrop() else request.centerCrop()).into(object : CustomViewTarget<TextView, Bitmap>(view) {
             override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
-                getView().background = RoundedBitmapDrawableFactory.create(getView().resources, resource).apply { isCircular = true }
+                getView().background = RoundedBitmapDrawableFactory.create(getView().resources, resource).apply {
+                    if (cornerRadiusDp == null) isCircular = true
+                    else cornerRadius = cornerRadiusDp * getView().resources.displayMetrics.density
+                }
                 getView().text = ""
             }
 

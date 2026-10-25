@@ -75,6 +75,7 @@
                     android:textSize="14sp" />
 
                 <TextView
+                    android:id="@+id/editPhotoButton"
                     style="@style/Heading"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -89,14 +90,17 @@
                 android:layout_height="124dp">
 
                 <TextView
+                    android:id="@+id/editProfileAvatar"
                     style="@style/Avatar"
                     android:layout_width="92dp"
                     android:layout_height="92dp"
                     android:layout_centerInParent="true"
-                    android:text="JW"
+                    android:text=""
                     android:textSize="28sp" />
 
                 <ImageView
+                    android:id="@+id/editPhotoCamera"
+                    android:contentDescription="Change profile picture"
                     android:layout_width="32dp"
                     android:layout_height="32dp"
                     android:layout_centerHorizontal="true"
@@ -122,6 +126,7 @@
                     android:textSize="14sp" />
 
                 <TextView
+                    android:id="@+id/editCoverButton"
                     style="@style/Heading"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -136,12 +141,16 @@
                 android:layout_height="132dp">
 
                 <ImageView
+                    android:id="@+id/editCoverImage"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:scaleType="centerCrop"
-                    android:src="@drawable/landscape_blue" />
+                    android:background="@color/teal_soft"
+                    android:contentDescription="Cover photo"
+                    android:scaleType="centerCrop" />
 
                 <ImageView
+                    android:id="@+id/editCoverCamera"
+                    android:contentDescription="Change cover photo"
                     android:layout_width="34dp"
                     android:layout_height="34dp"
                     android:layout_alignParentEnd="true"
@@ -232,7 +241,7 @@
                     android:textColor="@color/text_primary" />
 
                 <EditText
-                    android:id="@+id/profileBioInput"
+                    android:id="@+id/profileWebsiteInput"
                     style="@style/Body"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
@@ -240,6 +249,7 @@
                     android:background="@null"
                     android:gravity="center_vertical"
                     android:hint="Website"
+                    android:inputType="textUri"
                     android:singleLine="true" />
 
             </LinearLayout>
@@ -262,6 +272,9 @@
                     android:textColor="@color/text_primary" />
 
                 <EditText
+                    android:id="@+id/profileBioInput"
+                    android:hint="Bio"
+                    android:maxLength="150"
                     style="@style/Body"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
@@ -346,8 +359,8 @@
                     android:layout_height="match_parent"
                     android:layout_weight="1"
                     android:background="@null"
-                    android:enabled="false"
                     android:gravity="center_vertical"
+                    android:hint="Phone"
                     android:inputType="phone"
                     android:singleLine="true"
                     android:text="" />
