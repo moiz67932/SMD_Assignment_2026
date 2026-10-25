@@ -77,6 +77,11 @@ class KinnectApplication : Application(), Application.ActivityLifecycleCallbacks
         reference.setValue(mapOf("online" to false, "lastSeen" to mapOf(".sv" to "timestamp"))).addOnCompleteListener { onComplete() }
     }
 
+    /** Stops every listener that belongs to the signed-in user (called on logout). */
+    fun stopUserListeners() {
+        handler.removeCallbacks(markOffline)
+    }
+
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Insets.prepare(activity)
     override fun onActivityResumed(activity: Activity) = Unit
     override fun onActivityPaused(activity: Activity) = Unit

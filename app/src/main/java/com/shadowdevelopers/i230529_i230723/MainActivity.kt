@@ -1,43 +1,50 @@
 package com.shadowdevelopers.i230529_i230723
 
-import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
 
+/**
+ * Splash (01). Visible for exactly 5 seconds. The profile check starts immediately in parallel,
+ * so at t = 5 s the screen can decide without waiting: logged out -> Log in, profile known to be
+ * incomplete -> Edit profile, otherwise -> Home.
+ */
 class MainActivity : AppCompatActivity() {
-    private var navigated = false
+    private val handler = Handler(Looper.getMainLooper())
+    private var profileComplete: Boolean? = null
+    private val navigate = Runnable { route() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        Handler(Looper.getMainLooper()).postDelayed(
-            {
-                if (!navigated) {
-                    navigated = true
-                    val user = FirebaseAuth.getInstance().currentUser
-                    if (user == null) {
-                        open(LoginActivity::class.java)
-                    } else {
-                        FirebaseData.users.child(user.uid).get()
-                            .addOnSuccessListener { snapshot ->
-                                open(if (snapshot.child("profileSetupComplete").getValue(Boolean::class.java) == true) HomeActivity::class.java else EditProfileActivity::class.java)
-                            }
-                            .addOnFailureListener { open(EditProfileActivity::class.java) }
-                    }
-                }
-            },
-            5000
-        )
+        val user = FirebaseAuth.getInstance().currentUser
+        if (user != null) {
+            profileComplete = Session.profileComplete(this, user.uid)
+            FirebaseData.users.child(user.uid).child("profileSetupComplete").get().addOnSuccessListener { snapshot ->
+                val complete = snapshot.getValue(Boolean::class.java) == true
+                profileComplete = complete
+                Session.setProfileComplete(this, user.uid, complete)
+            }
+        }
+        handler.postDelayed(navigate, 5000)
     }
 
-    private fun open(target: Class<*>) {
-        val intent = Intent(this, target)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        startActivity(intent)
-        finish()
+    private fun route() {
+        val user = FirebaseAuth.getInstance().currentUser
+        val target = when {
+            user == null -> LoginActivity::class.java
+            profileComplete == false -> EditProfileActivity::class.java
+            else -> HomeActivity::class.java
+        }
+        Session.startFresh(this, target)
+    }
+
+    override fun onDestroy() {
+        // If the user leaves during the 5 s, don't open another screen later.
+        handler.removeCallbacks(navigate)
+        super.onDestroy()
     }
 }

@@ -31,21 +31,14 @@ class MenuActivity : AppCompatActivity() {
         open(R.id.profileCard, ProfileActivity::class.java)
         open(R.id.marketplaceShortcut, MarketplaceActivity::class.java)
         open(R.id.friendsShortcut, FriendsActivity::class.java)
-        open(R.id.homeTab, HomeActivity::class.java)
-        open(R.id.friendsTab, FriendsActivity::class.java)
-        open(R.id.marketTab, MarketplaceActivity::class.java)
-        open(R.id.notificationsTab, NotificationsActivity::class.java)
+        Nav.tab(this, R.id.homeTab, HomeActivity::class.java)
+        Nav.tab(this, R.id.friendsTab, FriendsActivity::class.java)
+        Nav.tab(this, R.id.marketTab, MarketplaceActivity::class.java)
+        Nav.tab(this, R.id.notificationsTab, NotificationsActivity::class.java)
 
         findViewById<View>(R.id.logoutButton).setOnClickListener {
-            val uid = FirebaseAuth.getInstance().currentUser?.uid
-            val logout = {
-                FirebaseAuth.getInstance().signOut()
-                val intent = Intent(this, LoginActivity::class.java)
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                startActivity(intent)
-                finish()
-            }
-            if (uid == null) logout() else (application as KinnectApplication).setOffline { logout() }
+            it.isEnabled = false
+            Session.logout(this)
         }
     }
 }

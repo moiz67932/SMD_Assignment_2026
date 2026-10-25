@@ -31,10 +31,10 @@ class FriendsActivity : AppCompatActivity() {
         setContentView(R.layout.activity_friends)
         open(R.id.searchButton, SearchActivity::class.java)
         open(R.id.chatsButton, ChatsActivity::class.java)
-        open(R.id.homeTab, HomeActivity::class.java)
-        open(R.id.marketTab, MarketplaceActivity::class.java)
-        open(R.id.notificationsTab, NotificationsActivity::class.java)
-        open(R.id.menuTab, MenuActivity::class.java)
+        Nav.tab(this, R.id.homeTab, HomeActivity::class.java)
+        Nav.tab(this, R.id.marketTab, MarketplaceActivity::class.java)
+        Nav.tab(this, R.id.notificationsTab, NotificationsActivity::class.java)
+        Nav.tab(this, R.id.menuTab, MenuActivity::class.java)
 
         friendAdapter = FriendAdapter(
             onOpen = { openProfile(it) },

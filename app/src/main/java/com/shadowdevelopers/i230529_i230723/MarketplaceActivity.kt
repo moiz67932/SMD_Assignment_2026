@@ -31,10 +31,10 @@ class MarketplaceActivity : AppCompatActivity() {
         setContentView(R.layout.activity_marketplace)
         open(R.id.searchButton, SearchActivity::class.java)
         open(R.id.chatsButton, ChatsActivity::class.java)
-        open(R.id.homeTab, HomeActivity::class.java)
-        open(R.id.friendsTab, FriendsActivity::class.java)
-        open(R.id.notificationsTab, NotificationsActivity::class.java)
-        open(R.id.menuTab, MenuActivity::class.java)
+        Nav.tab(this, R.id.homeTab, HomeActivity::class.java)
+        Nav.tab(this, R.id.friendsTab, FriendsActivity::class.java)
+        Nav.tab(this, R.id.notificationsTab, NotificationsActivity::class.java)
+        Nav.tab(this, R.id.menuTab, MenuActivity::class.java)
         findViewById<View>(R.id.sellButton).setOnClickListener { showAddItemDialog() }
         adapter = MarketItemAdapter()
         findViewById<RecyclerView>(R.id.marketplaceRecyclerView).apply {

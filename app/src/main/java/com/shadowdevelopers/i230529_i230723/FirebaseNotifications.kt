@@ -17,12 +17,25 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
 object FirebaseNotifications {
+    /** Each phone's token is stored under a short id derived from the token itself. */
+    private fun tokenId(token: String) = token.hashCode().toUInt().toString(16)
+
     fun saveToken() {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
         FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-            val tokenId = token.hashCode().toUInt().toString(16)
-            FirebaseData.database.getReference("fcmTokens").child(uid).child(tokenId).setValue(token)
+            FirebaseData.database.getReference("fcmTokens").child(uid).child(tokenId(token)).setValue(token)
         }
+    }
+
+    /** Called on logout so this phone stops receiving pushes meant for the account that left. */
+    fun removeToken(onDone: () -> Unit) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return onDone()
+        FirebaseMessaging.getInstance().token
+            .addOnSuccessListener { token ->
+                FirebaseData.database.getReference("fcmTokens").child(uid).child(tokenId(token)).removeValue()
+                    .addOnCompleteListener { onDone() }
+            }
+            .addOnFailureListener { onDone() }
     }
 
     fun show(context: Context, title: String, body: String, chatId: String?, senderId: String?) {

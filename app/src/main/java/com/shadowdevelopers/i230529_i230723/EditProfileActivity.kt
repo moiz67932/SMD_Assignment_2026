@@ -11,6 +11,8 @@ import com.google.firebase.database.Transaction
 
 class EditProfileActivity : AppCompatActivity() {
     private val user by lazy { FirebaseAuth.getInstance().currentUser }
+    /** True for a brand-new account: after saving, go to Home instead of back. */
+    private var firstSetup = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,6 +31,7 @@ class EditProfileActivity : AppCompatActivity() {
         }
         var oldUsername = ""
         FirebaseData.users.child(uid).get().addOnSuccessListener { snapshot ->
+            firstSetup = snapshot.child("profileSetupComplete").getValue(Boolean::class.java) != true
             oldUsername = snapshot.child("username").getValue(String::class.java).orEmpty()
             nameInput.setText(snapshot.child("name").getValue(String::class.java).orEmpty())
             usernameInput.setText(oldUsername)
@@ -98,7 +101,8 @@ class EditProfileActivity : AppCompatActivity() {
                         }
                     }
                     Toast.makeText(this, "Profile saved", Toast.LENGTH_SHORT).show()
-                    finish()
+                    Session.setProfileComplete(this, uid, true)
+                    if (firstSetup) Session.startFresh(this, HomeActivity::class.java) else finish()
                 }.addOnFailureListener {
                     save.isEnabled = true
                     Toast.makeText(this, it.localizedMessage ?: "Could not publish profile", Toast.LENGTH_LONG).show()

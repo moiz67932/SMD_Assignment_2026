@@ -257,26 +257,29 @@
             android:layout_marginTop="10dp">
 
             <View
+                android:id="@+id/strengthBar1"
                 android:layout_width="0dp"
                 android:layout_height="3dp"
                 android:layout_weight="1"
-                android:background="@color/red" />
+                android:background="@color/divider" />
 
             <Space
                 android:layout_width="5dp"
                 android:layout_height="3dp" />
 
             <View
+                android:id="@+id/strengthBar2"
                 android:layout_width="0dp"
                 android:layout_height="3dp"
                 android:layout_weight="1"
-                android:background="@color/orange" />
+                android:background="@color/divider" />
 
             <Space
                 android:layout_width="5dp"
                 android:layout_height="3dp" />
 
             <View
+                android:id="@+id/strengthBar3"
                 android:layout_width="0dp"
                 android:layout_height="3dp"
                 android:layout_weight="1"
@@ -291,7 +294,7 @@
             android:layout_height="wrap_content"
             android:gravity="end"
             android:text="Enter a password"
-            android:textColor="@color/orange" />
+            android:textColor="@color/text_secondary" />
 
         <CheckBox
             android:id="@+id/termsCheckbox"

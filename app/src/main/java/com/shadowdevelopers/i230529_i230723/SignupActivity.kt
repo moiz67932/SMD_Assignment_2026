@@ -12,6 +12,7 @@ import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.google.firebase.auth.FirebaseAuth
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -38,18 +39,10 @@ class SignupActivity : AppCompatActivity() {
         findViewById<View>(R.id.birthdayMonthButton).setOnClickListener { chooseBirthday() }
         findViewById<View>(R.id.birthdayYearButton).setOnClickListener { chooseBirthday() }
 
+        // Password strength updates on every keystroke: 1 bar = Weak, 2 = Medium, 3 = Strong.
         password.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                val value = s?.toString().orEmpty()
-                val score = listOf(value.length >= 8, value.any { it.isUpperCase() }, value.any { it.isDigit() }, value.any { !it.isLetterOrDigit() }).count { it }
-                strength.text = when {
-                    value.isEmpty() -> "Enter a password"
-                    score <= 1 -> "Weak"
-                    score <= 2 -> "Medium"
-                    else -> "Strong"
-                }
-            }
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = showStrength(s?.toString().orEmpty())
             override fun afterTextChanged(s: Editable?) = Unit
         })
 
@@ -105,11 +98,9 @@ class SignupActivity : AppCompatActivity() {
                             FirebaseData.profiles.child(user.uid).setValue(
                                 mapOf("uid" to user.uid, "name" to "$first $last", "nameLower" to "$first $last".lowercase(), "username" to "", "usernameLower" to "", "bio" to "", "profileSetupComplete" to false)
                             ).addOnSuccessListener {
-                                getSharedPreferences("kinnect", MODE_PRIVATE).edit().putString("recent_email", emailAddress).putString("recent_name", "$first $last").apply()
-                                val intent = Intent(this, EditProfileActivity::class.java)
-                                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                                startActivity(intent)
-                                finish()
+                                Session.saveRecent(this, emailAddress, "$first $last", null)
+                                Session.setProfileComplete(this, user.uid, false)
+                                Session.startFresh(this, EditProfileActivity::class.java)
                             }.addOnFailureListener {
                                 button.isEnabled = true
                                 Toast.makeText(this, it.localizedMessage ?: "Could not publish your searchable profile", Toast.LENGTH_LONG).show()
@@ -121,6 +112,21 @@ class SignupActivity : AppCompatActivity() {
                         }
                 }
         }
+    }
+
+    private fun showStrength(value: String) {
+        val score = listOf(value.length >= 8, value.any { it.isUpperCase() }, value.any { it.isDigit() }, value.any { !it.isLetterOrDigit() }).count { it }
+        val (bars, label, color) = when {
+            value.isEmpty() -> Triple(0, "Enter a password", R.color.text_secondary)
+            score <= 1 -> Triple(1, "Weak", R.color.red)
+            score == 2 -> Triple(2, "Medium", R.color.orange)
+            else -> Triple(3, "Strong", R.color.primary)
+        }
+        val tint = ContextCompat.getColor(this, color)
+        listOf(R.id.strengthBar1, R.id.strengthBar2, R.id.strengthBar3).forEachIndexed { index, id ->
+            findViewById<View>(id).setBackgroundColor(if (index < bars) tint else ContextCompat.getColor(this, R.color.divider))
+        }
+        findViewById<TextView>(R.id.passwordStrengthLabel).apply { text = label; setTextColor(tint) }
     }
 
     private fun chooseBirthday() {

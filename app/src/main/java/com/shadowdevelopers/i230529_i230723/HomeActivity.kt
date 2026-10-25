@@ -73,10 +73,10 @@ class HomeActivity : AppCompatActivity() {
         open(R.id.storyButton, StoryViewerActivity::class.java)
         open(R.id.profileButton, ProfileActivity::class.java)
         open(R.id.createStoryButton, CameraActivity::class.java)
-        open(R.id.friendsTab, FriendsActivity::class.java)
-        open(R.id.marketTab, MarketplaceActivity::class.java)
-        open(R.id.notificationsTab, NotificationsActivity::class.java)
-        open(R.id.menuTab, MenuActivity::class.java)
+        Nav.tab(this, R.id.friendsTab, FriendsActivity::class.java)
+        Nav.tab(this, R.id.marketTab, MarketplaceActivity::class.java)
+        Nav.tab(this, R.id.notificationsTab, NotificationsActivity::class.java)
+        Nav.tab(this, R.id.menuTab, MenuActivity::class.java)
     }
 
     private fun open(viewId: Int, target: Class<*>) {
