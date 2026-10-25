@@ -49,12 +49,16 @@
             android:layout_height="232dp">
 
             <ImageView
+                android:id="@+id/profileCoverImage"
                 android:layout_width="match_parent"
                 android:layout_height="174dp"
+                android:contentDescription="Cover photo"
                 android:scaleType="centerCrop"
-                android:src="@drawable/landscape_blue" />
+                android:background="@color/teal_soft" />
 
             <ImageView
+                android:id="@+id/profileCoverCamera"
+                android:contentDescription="Change cover photo"
                 android:layout_width="34dp"
                 android:layout_height="34dp"
                 android:layout_alignParentEnd="true"
@@ -77,6 +81,8 @@
                 android:textSize="34sp" />
 
             <ImageView
+                android:id="@+id/profileAvatarCamera"
+                android:contentDescription="Change profile picture"
                 android:layout_width="34dp"
                 android:layout_height="34dp"
                 android:layout_alignParentBottom="true"
