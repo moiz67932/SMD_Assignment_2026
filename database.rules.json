@@ -30,11 +30,21 @@
         }
       }
     },
+    "sentRequests": {
+      "$sender": {
+        ".read": "auth != null && auth.uid === $sender",
+        "$receiver": {
+          ".write": "auth != null && $sender !== $receiver && (auth.uid === $sender || (auth.uid === $receiver && !newData.exists()))",
+          ".validate": "newData.isNumber()"
+        }
+      }
+    },
     "friends": {
       "$uid": {
         ".read": "auth != null",
         "$friendUid": {
-          ".write": "auth != null && $uid !== $friendUid && (auth.uid === $uid || (auth.uid === $friendUid && root.child('friendRequests').child(auth.uid).child($uid).exists()))"
+          ".write": "auth != null && $uid !== $friendUid && ((!newData.exists() && (auth.uid === $uid || auth.uid === $friendUid)) || (!data.exists() && ((auth.uid === $uid && root.child('friendRequests').child($uid).child($friendUid).exists()) || (auth.uid === $friendUid && root.child('friendRequests').child($friendUid).child($uid).exists()))))",
+          ".validate": "newData.val() === true"
         }
       }
     },

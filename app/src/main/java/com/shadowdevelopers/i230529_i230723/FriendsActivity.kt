@@ -2,33 +2,50 @@ package com.shadowdevelopers.i230529_i230723
 
 import android.content.Intent
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.ValueEventListener
 
-data class FriendRow(val uid: String, val name: String, val username: String, val isRequest: Boolean)
+/** What a row in Friends (14) is: an incoming request, a suggestion, or an existing friend. */
+enum class FriendRowKind { REQUEST, SUGGESTION, FRIEND }
 
+data class FriendRow(val uid: String, val kind: FriendRowKind, val relation: Relation, val time: Long = 0L, val mutual: List<String> = emptyList())
+
+/**
+ * Friends (14). "Suggestions" shows pending requests (live count) and People you may know
+ * (friends of friends, most mutual friends first). "Your friends" shows the real friends list.
+ */
 class FriendsActivity : AppCompatActivity() {
-    private val uid by lazy { FirebaseAuth.getInstance().currentUser?.uid }
-    private val requestIds = mutableListOf<String>()
-    private val friendIds = mutableListOf<String>()
-    private var requestsListener: ValueEventListener? = null
-    private var friendsListener: ValueEventListener? = null
+    private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    private val listeners = ListenerBag()
+    private lateinit var state: FriendState
+    private lateinit var requestsAdapter: FriendAdapter
+    private lateinit var listAdapter: FriendAdapter
     private var showingFriends = false
-    private lateinit var friendAdapter: FriendAdapter
+    private var showAllRequests = false
+    /** Friend lists of other people, read once per visit (used for mutual counts and suggestions). */
+    private val friendsOf = mutableMapOf<String, Set<String>>()
+    private var suggestions: List<FriendRow>? = null
+    private var suggestionsFor: Set<String>? = null
+    private val dismissed = mutableSetOf<String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_friends)
+        if (me.isBlank()) {
+            finish()
+            return
+        }
         open(R.id.searchButton, SearchActivity::class.java)
         open(R.id.chatsButton, ChatsActivity::class.java)
         Nav.tab(this, R.id.homeTab, HomeActivity::class.java)
@@ -36,116 +53,161 @@ class FriendsActivity : AppCompatActivity() {
         Nav.tab(this, R.id.notificationsTab, NotificationsActivity::class.java)
         Nav.tab(this, R.id.menuTab, MenuActivity::class.java)
 
-        friendAdapter = FriendAdapter(
-            onOpen = { openProfile(it) },
-            onConfirm = { confirm(it) },
-            onDelete = { delete(it) }
-        )
+        state = FriendState(me) { render() }
+        requestsAdapter = FriendAdapter(::openProfile, ::primaryAction, ::secondaryAction)
+        listAdapter = FriendAdapter(::openProfile, ::primaryAction, ::secondaryAction)
+        findViewById<RecyclerView>(R.id.requestsRecyclerView).apply {
+            layoutManager = LinearLayoutManager(this@FriendsActivity)
+            adapter = requestsAdapter
+        }
         findViewById<RecyclerView>(R.id.friendsRecyclerView).apply {
             layoutManager = LinearLayoutManager(this@FriendsActivity)
-            isNestedScrollingEnabled = false
-            adapter = friendAdapter
+            adapter = listAdapter
         }
-        findViewById<View>(R.id.suggestionsTab).setOnClickListener {
-            showingFriends = false
-            renderRows()
-        }
-        findViewById<View>(R.id.yourFriendsTab).setOnClickListener {
-            showingFriends = true
-            renderRows()
-        }
-        findViewById<View>(R.id.seeAllFriends).setOnClickListener {
-            showingFriends = true
-            renderRows()
-        }
+        findViewById<View>(R.id.suggestionsTab).setOnClickListener { showingFriends = false; render() }
+        findViewById<View>(R.id.yourFriendsTab).setOnClickListener { showingFriends = true; render() }
+        findViewById<View>(R.id.seeAllFriends).setOnClickListener { showAllRequests = true; render() }
+    }
 
-        uid?.let { userId ->
-            val requestObserver = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    requestIds.clear()
-                    snapshot.children.forEach { requestIds.add(it.key.orEmpty()) }
-                    findViewById<TextView>(R.id.friendRequestCount).text = "Friend requests ${requestIds.size}"
-                    renderRows()
+    override fun onStart() {
+        super.onStart()
+        if (me.isNotBlank()) state.attach(listeners)
+    }
+
+    override fun onStop() {
+        listeners.removeAll()
+        super.onStop()
+    }
+
+    private fun render() {
+        styleChip(R.id.suggestionsTab, !showingFriends)
+        styleChip(R.id.yourFriendsTab, showingFriends)
+
+        // Friend requests N (the number in red, as in the design).
+        val count = state.incoming.size
+        val header = SpannableString("Friend requests $count")
+        header.setSpan(ForegroundColorSpan(ContextCompat.getColor(this, R.color.red)), header.length - count.toString().length, header.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        findViewById<TextView>(R.id.friendRequestCount).text = header
+        val requests = state.incoming.entries.sortedByDescending { it.value }
+            .map { FriendRow(it.key, FriendRowKind.REQUEST, Relation.INCOMING, it.value, mutualWith(it.key)) }
+        requestsAdapter.setRows(if (showAllRequests) requests else requests.take(4))
+        findViewById<View>(R.id.seeAllFriends).visibility = if (!showAllRequests && requests.size > 4) View.VISIBLE else View.GONE
+        findViewById<TextView>(R.id.requestsEmpty).apply {
+            text = "No friend requests"
+            visibility = if (requests.isEmpty()) View.VISIBLE else View.GONE
+        }
+        loadFriendLists(state.incoming.keys)
+        findViewById<View>(R.id.requestsSection).visibility = if (showingFriends) View.GONE else View.VISIBLE
+
+        val title = findViewById<TextView>(R.id.friendsSectionTitle)
+        val empty = findViewById<TextView>(R.id.friendsEmpty)
+        if (showingFriends) {
+            title.text = if (state.friends.size == 1) "Your friends · 1" else "Your friends · ${state.friends.size}"
+            val rows = state.friends.map { FriendRow(it, FriendRowKind.FRIEND, Relation.FRIENDS) }
+            listAdapter.setRows(rows)
+            empty.text = "You have no friends yet. Use Search to find people."
+            empty.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
+        } else {
+            title.text = "People you may know"
+            refreshSuggestions()
+            val rows = suggestions?.filter { it.uid !in dismissed && state.relation(it.uid).let { r -> r == Relation.NONE || r == Relation.OUTGOING } }
+                ?.map { it.copy(relation = state.relation(it.uid)) }
+            listAdapter.setRows(rows.orEmpty())
+            empty.text = if (rows == null) "Loading…" else "No suggestions right now"
+            empty.visibility = if (rows.isNullOrEmpty()) View.VISIBLE else View.GONE
+        }
+    }
+
+    private fun styleChip(id: Int, selected: Boolean) {
+        findViewById<TextView>(id).apply {
+            setBackgroundResource(if (selected) R.drawable.rounded_teal_soft else R.drawable.rounded_soft)
+            setTextColor(ContextCompat.getColor(this@FriendsActivity, if (selected) R.color.primary else R.color.text_primary))
+        }
+    }
+
+    private fun mutualWith(uid: String) = friendsOf[uid]?.filter { it in state.friends && it != me }.orEmpty()
+
+    /** Reads friends/{uid} once for each person we need mutual counts for, then re-renders. */
+    private fun loadFriendLists(uids: Collection<String>, onDone: (() -> Unit)? = null) {
+        val missing = uids.filter { it !in friendsOf }
+        if (missing.isEmpty()) {
+            onDone?.invoke()
+            return
+        }
+        var left = missing.size
+        missing.forEach { uid ->
+            friendsOf[uid] = emptySet()
+            FirebaseData.friends.child(uid).get().addOnCompleteListener { task ->
+                if (task.isSuccessful) friendsOf[uid] = task.result.children.filter { it.getValue(Boolean::class.java) == true }.mapNotNull { it.key }.toSet()
+                left--
+                if (left == 0) {
+                    if (onDone != null) onDone() else render()
                 }
-                override fun onCancelled(error: com.google.firebase.database.DatabaseError) = showError(error.message)
             }
-            requestsListener = requestObserver
-            FirebaseData.friendRequests.child(userId).addValueEventListener(requestObserver)
+        }
+    }
 
-            val friendsObserver = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    friendIds.clear()
-                    snapshot.children.forEach { if (it.getValue(Boolean::class.java) == true) friendIds.add(it.key.orEmpty()) }
-                    renderRows()
+    /**
+     * People you may know: friends of my friends (up to 40 friends scanned), ranked by mutual friends.
+     * A new user with no friends gets a few other Kinnect members instead.
+     */
+    private fun refreshSuggestions() {
+        val myFriends = state.friends.toSet()
+        if (suggestionsFor == myFriends) return
+        suggestionsFor = myFriends
+        loadFriendLists(myFriends.take(40)) {
+            val counts = mutableMapOf<String, MutableList<String>>()
+            myFriends.take(40).forEach { friend ->
+                friendsOf[friend].orEmpty().forEach { candidate ->
+                    if (candidate != me && candidate !in myFriends) counts.getOrPut(candidate) { mutableListOf() }.add(friend)
                 }
-                override fun onCancelled(error: com.google.firebase.database.DatabaseError) = showError(error.message)
             }
-            friendsListener = friendsObserver
-            FirebaseData.friends.child(userId).addValueEventListener(friendsObserver)
+            if (counts.isNotEmpty()) {
+                suggestions = counts.entries.sortedByDescending { it.value.size }.take(20)
+                    .map { FriendRow(it.key, FriendRowKind.SUGGESTION, Relation.NONE, mutual = it.value) }
+                render()
+            } else {
+                FirebaseData.profiles.limitToFirst(40).get().addOnCompleteListener { task ->
+                    suggestions = if (!task.isSuccessful) emptyList() else task.result.children
+                        .filter { it.key != me && it.child("profileSetupComplete").getValue(Boolean::class.java) == true }
+                        .map { FriendRow(it.key.orEmpty(), FriendRowKind.SUGGESTION, Relation.NONE) }.take(20)
+                    render()
+                }
+            }
         }
     }
 
-    private fun renderRows() {
-        val ids = if (showingFriends) friendIds.toList() else requestIds.toList()
-        findViewById<TextView>(R.id.friendsSectionTitle).text = if (showingFriends) "Your friends" else "Friend requests"
-        val rows = ids.map { FriendRow(it, "Loading…", "", !showingFriends) }
-        friendAdapter.setRows(rows)
-        rows.forEachIndexed { index, row ->
-            FirebaseData.profiles.child(row.uid).get().addOnSuccessListener { profile ->
-                if (showingFriends != !row.isRequest) return@addOnSuccessListener
-                val currentIds = if (showingFriends) friendIds else requestIds
-                if (currentIds.getOrNull(index) != row.uid) return@addOnSuccessListener
-                val name = profile.child("name").getValue(String::class.java) ?: "Kinnect member"
-                val username = profile.child("username").getValue(String::class.java).orEmpty()
-                friendAdapter.updateRow(index, row.copy(name = name, username = username))
-            }.addOnFailureListener { showError(it.localizedMessage ?: "Could not load friend profile") }
+    private fun primaryAction(row: FriendRow) {
+        when (row.kind) {
+            FriendRowKind.REQUEST -> FriendActions.confirm(this, me, row.uid)
+            FriendRowKind.SUGGESTION ->
+                if (state.relation(row.uid) == Relation.OUTGOING) FriendActions.cancelRequest(this, me, row.uid)
+                else FriendActions.sendRequest(this, me, row.uid)
+            FriendRowKind.FRIEND -> openProfile(row.uid)
         }
     }
 
-    private fun confirm(otherUid: String) {
-        val userId = uid ?: return
-        val notificationId = FirebaseData.database.getReference("notifications").child(otherUid).push().key ?: return
-        val updates = mapOf<String, Any?>(
-            "friends/$userId/$otherUid" to true,
-            "friends/$otherUid/$userId" to true,
-            "friendRequests/$userId/$otherUid" to null,
-            "notifications/$otherUid/$notificationId" to mapOf("senderId" to userId, "type" to "friendAccepted", "body" to "accepted your friend request", "createdAt" to mapOf(".sv" to "timestamp"), "read" to false)
-        )
-        FirebaseData.database.reference.updateChildren(updates).addOnFailureListener { showError(it.localizedMessage ?: "Could not confirm request") }
+    private fun secondaryAction(row: FriendRow) {
+        when (row.kind) {
+            FriendRowKind.REQUEST -> FriendActions.deleteIncoming(this, me, row.uid)
+            FriendRowKind.SUGGESTION -> { dismissed.add(row.uid); render() }
+            FriendRowKind.FRIEND -> Unit
+        }
     }
 
-    private fun delete(otherUid: String) {
-        val userId = uid ?: return
-        FirebaseData.friendRequests.child(userId).child(otherUid).removeValue()
-            .addOnFailureListener { showError(it.localizedMessage ?: "Could not delete request") }
-    }
-
-    private fun openProfile(personUid: String) {
-        startActivity(Intent(this, OtherProfileActivity::class.java).putExtra("person_uid", personUid))
+    private fun openProfile(uid: String) {
+        startActivity(Intent(this, OtherProfileActivity::class.java).putExtra("person_uid", uid))
     }
 
     private fun open(viewId: Int, target: Class<*>) {
         findViewById<View>(viewId).setOnClickListener { startActivity(Intent(this, target)) }
     }
-
-    private fun showError(message: String) {
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-    }
-
-    override fun onDestroy() {
-        val userId = uid
-        if (userId != null) {
-            requestsListener?.let { FirebaseData.friendRequests.child(userId).removeEventListener(it) }
-            friendsListener?.let { FirebaseData.friends.child(userId).removeEventListener(it) }
-        }
-        super.onDestroy()
-    }
 }
 
-private class FriendAdapter(
+class FriendAdapter(
     private val onOpen: (String) -> Unit,
-    private val onConfirm: (String) -> Unit,
-    private val onDelete: (String) -> Unit
+    private val onPrimary: (FriendRow) -> Unit,
+    private val onSecondary: (FriendRow) -> Unit
 ) : RecyclerView.Adapter<FriendAdapter.FriendViewHolder>() {
     private val rows = mutableListOf<FriendRow>()
 
@@ -155,34 +217,52 @@ private class FriendAdapter(
         notifyDataSetChanged()
     }
 
-    fun updateRow(position: Int, row: FriendRow) {
-        if (position !in rows.indices) return
-        rows[position] = row
-        notifyItemChanged(position)
-    }
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): FriendViewHolder {
-        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_friend, parent, false)
-        return FriendViewHolder(view)
-    }
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
+        FriendViewHolder(LayoutInflater.from(parent.context).inflate(R.layout.item_friend, parent, false))
 
     override fun onBindViewHolder(holder: FriendViewHolder, position: Int) = holder.bind(rows[position])
     override fun getItemCount() = rows.size
 
     inner class FriendViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        private val name = view.findViewById<TextView>(R.id.friendName)
-        private val username = view.findViewById<TextView>(R.id.friendUsername)
         private val avatar = view.findViewById<TextView>(R.id.friendAvatar)
+        private val name = view.findViewById<TextView>(R.id.friendName)
+        private val time = view.findViewById<TextView>(R.id.friendTime)
+        private val subtitle = view.findViewById<TextView>(R.id.friendSubtitle)
+        private val mutualViews = listOf(view.findViewById<TextView>(R.id.friendMutual1), view.findViewById<TextView>(R.id.friendMutual2))
         private val actions = view.findViewById<View>(R.id.friendRequestActions)
+        private val primary = view.findViewById<Button>(R.id.confirmFriendRequest)
+        private val secondary = view.findViewById<Button>(R.id.deleteFriendRequest)
 
         fun bind(row: FriendRow) {
-            name.text = row.name
-            username.text = if (row.username.isBlank()) "" else "@${row.username}"
-            avatar.text = row.name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("")
-            actions.visibility = if (row.isRequest) View.VISIBLE else View.GONE
+            itemView.tag = row.uid
+            time.text = if (row.time > 0) TimeFormat.ago(row.time) else ""
+            subtitle.text = when (row.mutual.size) {
+                0 -> ""
+                1 -> "1 mutual friend"
+                else -> "${row.mutual.size} mutual friends"
+            }
+            name.text = ""
+            avatar.text = ""
+            ProfileCache.get(row.uid) { profile ->
+                if (itemView.tag != row.uid) return@get
+                name.text = profile.name
+                AvatarBinder.bind(avatar, profile.name, profile.photo)
+                if (row.mutual.isEmpty()) subtitle.text = if (profile.username.isBlank()) "" else "@${profile.username}"
+            }
+            mutualViews.forEachIndexed { index, view ->
+                val friend = row.mutual.getOrNull(index)
+                view.visibility = if (friend == null) View.GONE else View.VISIBLE
+                if (friend != null) ProfileCache.get(friend) { if (itemView.tag == row.uid) AvatarBinder.bind(view, it.name, it.photo) }
+            }
+            actions.visibility = if (row.kind == FriendRowKind.FRIEND) View.GONE else View.VISIBLE
+            when (row.kind) {
+                FriendRowKind.REQUEST -> { primary.text = "Confirm"; secondary.text = "Delete" }
+                FriendRowKind.SUGGESTION -> { primary.text = FriendState.label(row.relation); secondary.text = "Remove" }
+                FriendRowKind.FRIEND -> Unit
+            }
             itemView.setOnClickListener { onOpen(row.uid) }
-            itemView.findViewById<Button>(R.id.confirmFriendRequest).setOnClickListener { onConfirm(row.uid) }
-            itemView.findViewById<Button>(R.id.deleteFriendRequest).setOnClickListener { onDelete(row.uid) }
+            primary.setOnClickListener { onPrimary(row) }
+            secondary.setOnClickListener { onSecondary(row) }
         }
     }
 }

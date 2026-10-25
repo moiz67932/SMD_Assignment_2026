@@ -5,7 +5,9 @@ import android.os.Bundle
 import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.PopupMenu
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
 
@@ -18,11 +20,8 @@ class OtherProfileActivity : AppCompatActivity() {
     private var personUid = ""
     private var personName = ""
     private val otherFriends = mutableSetOf<String>()
-    private val myFriends = mutableSetOf<String>()
     private lateinit var actionLabel: TextView
-    private var isAlreadyFriend = false
-    private var hasIncomingRequest = false
-    private var hasOutgoingRequest = false
+    private var state: FriendState? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,7 +44,9 @@ class OtherProfileActivity : AppCompatActivity() {
             finish()
             return
         }
+        state = FriendState(currentUid.orEmpty()) { updateFriendActionLabel(); showMutualFriends() }
         findViewById<View>(R.id.friendActionButton).setOnClickListener { performFriendAction() }
+        findViewById<View>(R.id.otherMoreButton).setOnClickListener { showMoreMenu(it) }
         findViewById<View>(R.id.messageButton).setOnClickListener {
             startActivity(Intent(this, ChatActivity::class.java).putExtra("person_uid", personUid).putExtra("person_name", personName))
         }
@@ -74,14 +75,8 @@ class OtherProfileActivity : AppCompatActivity() {
             snapshot.children.forEach { if (it.getValue(Boolean::class.java) == true) otherFriends.add(it.key.orEmpty()) }
             showMutualFriends()
         }
-        listeners.value(FirebaseData.friends.child(uid)) { snapshot ->
-            myFriends.clear()
-            snapshot.children.forEach { if (it.getValue(Boolean::class.java) == true) myFriends.add(it.key.orEmpty()) }
-            showMutualFriends()
-        }
-        listeners.value(FirebaseData.friends.child(uid).child(personUid)) { isAlreadyFriend = it.getValue(Boolean::class.java) == true; updateFriendActionLabel() }
-        listeners.value(FirebaseData.friendRequests.child(uid).child(personUid)) { hasIncomingRequest = it.exists(); updateFriendActionLabel() }
-        listeners.value(FirebaseData.friendRequests.child(personUid).child(uid)) { hasOutgoingRequest = it.exists(); updateFriendActionLabel() }
+        // My friends + incoming/outgoing requests, live: drives the friend button and the mutual count.
+        state?.attach(listeners)
         // Photos: the images from this person's latest posts (posts are readable by any signed-in user).
         listeners.value(FirebaseData.posts.orderByChild("authorId").equalTo(personUid).limitToLast(30)) { snapshot ->
             val images = snapshot.children.sortedByDescending { it.child("createdAt").getValue(Long::class.java) ?: 0L }
@@ -104,7 +99,7 @@ class OtherProfileActivity : AppCompatActivity() {
 
     /** Friend count, mutual count (set intersection) and up to three mutual friends' avatars and names. */
     private fun showMutualFriends() {
-        val mutual = otherFriends.intersect(myFriends).toList()
+        val mutual = otherFriends.intersect(state?.friends.orEmpty()).toList()
         val friendsLabel = if (otherFriends.size == 1) "1 friend" else "${otherFriends.size} friends"
         findViewById<TextView>(R.id.otherProfileStats).text = "$friendsLabel · ${mutual.size} mutual"
         val namesView = findViewById<TextView>(R.id.otherMutualFriendNames)
@@ -136,38 +131,44 @@ class OtherProfileActivity : AppCompatActivity() {
         }
     }
 
+    private fun relation() = state?.relation(personUid) ?: Relation.NONE
+
+    /** Add friend -> Requested -> Friends, live. An incoming request shows Confirm (Delete is in the ... menu). */
     private fun updateFriendActionLabel() {
-        actionLabel.text = when {
-            isAlreadyFriend -> "Friends"
-            hasIncomingRequest -> "Confirm"
-            hasOutgoingRequest -> "Requested"
-            else -> "Add friend"
-        }
+        actionLabel.text = FriendState.label(relation())
     }
 
     private fun performFriendAction() {
         val uid = currentUid ?: return
-        when (actionLabel.text.toString()) {
-            "Add friend" -> {
-                val request = mapOf<String, Any>("senderId" to uid, "receiverId" to personUid, "createdAt" to mapOf(".sv" to "timestamp"))
-                FirebaseData.friendRequests.child(personUid).child(uid).setValue(request)
-                    .addOnSuccessListener {
-                        FirebaseData.database.getReference("notifications").child(personUid).push()
-                            .setValue(mapOf("senderId" to uid, "type" to "friendRequest", "body" to "sent you a friend request", "createdAt" to mapOf(".sv" to "timestamp"), "read" to false))
-                    }.addOnFailureListener { Toast.makeText(this, it.localizedMessage ?: "Could not send request", Toast.LENGTH_LONG).show() }
-            }
-            "Confirm" -> {
-                val notificationId = FirebaseData.database.getReference("notifications").child(personUid).push().key ?: return
-                val updates = mapOf<String, Any?>(
-                    "friends/$uid/$personUid" to true,
-                    "friends/$personUid/$uid" to true,
-                    "friendRequests/$uid/$personUid" to null,
-                    "notifications/$personUid/$notificationId" to mapOf("senderId" to uid, "type" to "friendAccepted", "body" to "accepted your friend request", "createdAt" to mapOf(".sv" to "timestamp"), "read" to false)
-                )
-                FirebaseData.database.reference.updateChildren(updates)
-                    .addOnFailureListener { Toast.makeText(this, it.localizedMessage ?: "Could not confirm request", Toast.LENGTH_LONG).show() }
-            }
-            "Requested" -> FirebaseData.friendRequests.child(personUid).child(uid).removeValue()
+        when (relation()) {
+            Relation.NONE -> FriendActions.sendRequest(this, uid, personUid)
+            Relation.OUTGOING -> FriendActions.cancelRequest(this, uid, personUid)
+            Relation.INCOMING -> FriendActions.confirm(this, uid, personUid)
+            Relation.FRIENDS -> showMoreMenu(findViewById(R.id.friendActionButton))
+            Relation.SELF -> Unit
         }
+    }
+
+    private fun showMoreMenu(anchor: View) {
+        val uid = currentUid ?: return
+        val menu = PopupMenu(this, anchor)
+        when (relation()) {
+            Relation.INCOMING -> menu.menu.add(0, 1, 0, "Delete friend request")
+            Relation.OUTGOING -> menu.menu.add(0, 2, 0, "Cancel friend request")
+            Relation.FRIENDS -> menu.menu.add(0, 3, 0, "Unfriend")
+            else -> menu.menu.add(0, 4, 0, "Add friend")
+        }
+        menu.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> FriendActions.deleteIncoming(this, uid, personUid)
+                2 -> FriendActions.cancelRequest(this, uid, personUid)
+                3 -> AlertDialog.Builder(this).setMessage("Remove $personName from your friends?")
+                    .setPositiveButton("Unfriend") { _, _ -> FriendActions.unfriend(this, uid, personUid) }
+                    .setNegativeButton("Cancel", null).show()
+                4 -> FriendActions.sendRequest(this, uid, personUid)
+            }
+            true
+        }
+        menu.show()
     }
 }

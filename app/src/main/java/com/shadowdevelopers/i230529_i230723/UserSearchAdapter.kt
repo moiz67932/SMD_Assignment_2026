@@ -5,16 +5,16 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.DataSnapshot
 
-data class SearchUser(val uid: String, val name: String, val username: String, val bio: String)
+data class SearchUser(val uid: String, val name: String, val username: String, val bio: String, val photo: String = "")
 
+/** Search (13) results. The friend button text comes from the live FriendState, never from a one-time read. */
 class UserSearchAdapter(
+    private val relationOf: (String) -> Relation,
     private val onOpen: (SearchUser) -> Unit,
-    private val onRequest: (SearchUser, Button) -> Unit,
-    private val onAccept: (SearchUser, Button) -> Unit
+    private val onAction: (SearchUser, Relation) -> Unit
 ) : RecyclerView.Adapter<UserSearchAdapter.UserViewHolder>() {
     private val users = mutableListOf<SearchUser>()
 
@@ -38,37 +38,20 @@ class UserSearchAdapter(
         private val action = view.findViewById<Button>(R.id.userFriendAction)
 
         fun bind(user: SearchUser) {
+            val relation = relationOf(user.uid)
             name.text = user.name
-            subtitle.text = if (user.username.isBlank()) user.bio else "@${user.username}"
-            avatar.text = user.name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("")
+            subtitle.text = listOfNotNull(
+                if (relation == Relation.FRIENDS) "Friend" else null,
+                user.username.takeIf { it.isNotBlank() }?.let { "@$it" }
+            ).joinToString(" · ").ifBlank { user.bio }
+            AvatarBinder.bind(avatar, user.name, user.photo)
             itemView.setOnClickListener { onOpen(user) }
-            action.tag = user.uid
-            action.isEnabled = false
-            action.text = "…"
-            val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
-            FirebaseData.friends.child(uid).child(user.uid).get().addOnSuccessListener { friend ->
-                if (action.tag != user.uid) return@addOnSuccessListener
-                if (friend.getValue(Boolean::class.java) == true) {
-                    action.text = "Friends"
-                    action.isEnabled = false
-                    return@addOnSuccessListener
-                }
-                FirebaseData.friendRequests.child(uid).child(user.uid).get().addOnSuccessListener { incoming ->
-                    if (action.tag != user.uid) return@addOnSuccessListener
-                    if (incoming.exists()) {
-                        action.text = "Confirm"
-                        action.isEnabled = true
-                        action.setOnClickListener { onAccept(user, action) }
-                    } else {
-                        FirebaseData.friendRequests.child(user.uid).child(uid).get().addOnSuccessListener { outgoing ->
-                            if (action.tag != user.uid) return@addOnSuccessListener
-                            action.text = if (outgoing.exists()) "Requested" else "Add friend"
-                            action.isEnabled = !outgoing.exists()
-                            action.setOnClickListener { onRequest(user, action) }
-                        }
-                    }
-                }
-            }
+            action.text = FriendState.label(relation)
+            // Teal for an action you can take, light grey once you are friends or the request is pending.
+            val filled = relation == Relation.NONE || relation == Relation.INCOMING
+            action.setBackgroundResource(if (filled) R.drawable.rounded_teal else R.drawable.rounded_light)
+            action.setTextColor(ContextCompat.getColor(itemView.context, if (filled) R.color.white else R.color.text_primary))
+            action.setOnClickListener { onAction(user, relation) }
         }
     }
 }

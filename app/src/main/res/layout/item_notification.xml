@@ -1,18 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- One notification in Notifications (18). New (unread) rows get the teal tint from the adapter. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/notificationRow"
     android:layout_width="match_parent"
-    android:layout_height="78dp"
-    android:gravity="center_vertical"
+    android:layout_height="wrap_content"
+    android:minHeight="74dp"
     android:orientation="horizontal"
-    android:paddingHorizontal="14dp">
+    android:paddingHorizontal="14dp"
+    android:paddingVertical="10dp">
 
-    <TextView
-        android:id="@+id/notificationAvatar"
-        style="@style/Avatar"
-        android:layout_width="46dp"
-        android:layout_height="46dp"
-        android:textSize="12sp" />
+    <RelativeLayout
+        android:layout_width="56dp"
+        android:layout_height="56dp">
+
+        <TextView
+            android:id="@+id/notificationAvatar"
+            style="@style/Avatar"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:textSize="14sp" />
+
+        <ImageView
+            android:id="@+id/notificationBadge"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_alignParentEnd="true"
+            android:layout_alignParentBottom="true"
+            android:background="@drawable/circle_teal"
+            android:contentDescription="Notification type"
+            android:padding="4dp"
+            android:tint="@color/white" />
+
+    </RelativeLayout>
 
     <LinearLayout
         android:layout_width="0dp"
@@ -25,13 +44,52 @@
             android:id="@+id/notificationText"
             style="@style/Body"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content"
+            android:textSize="13sp" />
 
         <TextView
             android:id="@+id/notificationTime"
             style="@style/Meta"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="3dp" />
+            android:layout_marginTop="2dp" />
+
+        <LinearLayout
+            android:id="@+id/notificationActions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:visibility="gone">
+
+            <Button
+                android:id="@+id/notificationConfirm"
+                style="@style/TealButton"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:text="Confirm"
+                android:textSize="11sp" />
+
+            <Button
+                android:id="@+id/notificationDelete"
+                style="@style/LightButton"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:text="Delete"
+                android:textSize="11sp" />
+
+        </LinearLayout>
+
     </LinearLayout>
+
+    <ImageView
+        android:id="@+id/notificationMore"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:contentDescription="More options"
+        android:padding="6dp"
+        android:src="@drawable/ic_more" />
+
 </LinearLayout>

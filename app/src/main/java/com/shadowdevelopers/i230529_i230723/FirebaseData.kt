@@ -9,6 +9,7 @@ object FirebaseData {
     val usernames = database.getReference("usernames")
     val friends = database.getReference("friends")
     val friendRequests = database.getReference("friendRequests")
+    val sentRequests = database.getReference("sentRequests")
     val posts = database.getReference("posts")
     val postReactions = database.getReference("postReactions")
     val comments = database.getReference("comments")

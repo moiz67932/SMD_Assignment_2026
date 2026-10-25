@@ -4,7 +4,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
-import android.widget.Button
 import android.widget.EditText
 import android.widget.Toast
 import android.view.View
@@ -22,15 +21,19 @@ class SearchActivity : AppCompatActivity() {
     private var usernameListener: com.google.firebase.database.ValueEventListener? = null
     private var nameListener: com.google.firebase.database.ValueEventListener? = null
     private lateinit var adapter: UserSearchAdapter
+    private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    private val listeners = ListenerBag()
+    private lateinit var state: FriendState
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_search)
         findViewById<View>(R.id.backButton).setOnClickListener { finish() }
+        state = FriendState(me) { adapter.notifyDataSetChanged() }
         adapter = UserSearchAdapter(
+            relationOf = { state.relation(it) },
             onOpen = { user -> startActivity(Intent(this, OtherProfileActivity::class.java).putExtra("person_uid", user.uid)) },
-            onRequest = { user, button -> sendRequest(user, button) },
-            onAccept = { user, button -> acceptRequest(user, button) }
+            onAction = { user, relation -> friendAction(user, relation) }
         )
         findViewById<RecyclerView>(R.id.searchResults).apply {
             layoutManager = LinearLayoutManager(this@SearchActivity)
@@ -74,44 +77,31 @@ class SearchActivity : AppCompatActivity() {
                 uid,
                 profile.child("name").getValue(String::class.java).orEmpty(),
                 profile.child("username").getValue(String::class.java).orEmpty(),
-                profile.child("bio").getValue(String::class.java).orEmpty()
+                profile.child("bio").getValue(String::class.java).orEmpty(),
+                profile.child("photo").getValue(String::class.java).orEmpty()
             )
         }
         adapter.setUsers(results.values.toList())
     }
 
-    private fun sendRequest(user: SearchUser, button: Button) {
-        val senderId = FirebaseAuth.getInstance().currentUser?.uid ?: return
-        val path = FirebaseData.friendRequests.child(user.uid).child(senderId)
-        val request = mapOf<String, Any>("senderId" to senderId, "receiverId" to user.uid, "createdAt" to mapOf(".sv" to "timestamp"))
-        path.setValue(request).addOnSuccessListener {
-            button.text = "Requested"
-            button.isEnabled = false
-            addNotification(user.uid, senderId, "sent you a friend request")
-        }.addOnFailureListener { Toast.makeText(this, it.localizedMessage ?: "Could not send friend request", Toast.LENGTH_LONG).show() }
+    /** Add friend -> Requested (tap again to cancel) ; Confirm accepts an incoming request ; Friends opens the profile. */
+    private fun friendAction(user: SearchUser, relation: Relation) {
+        when (relation) {
+            Relation.NONE -> FriendActions.sendRequest(this, me, user.uid)
+            Relation.OUTGOING -> FriendActions.cancelRequest(this, me, user.uid)
+            Relation.INCOMING -> FriendActions.confirm(this, me, user.uid)
+            else -> startActivity(Intent(this, OtherProfileActivity::class.java).putExtra("person_uid", user.uid))
+        }
     }
 
-    private fun acceptRequest(user: SearchUser, button: Button) {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
-        val notificationId = FirebaseData.database.getReference("notifications").child(user.uid).push().key ?: return
-        val updates = mapOf<String, Any?>(
-            "friends/$uid/${user.uid}" to true,
-            "friends/${user.uid}/$uid" to true,
-            "friendRequests/$uid/${user.uid}" to null,
-            "notifications/${user.uid}/$notificationId" to mapOf("senderId" to uid, "type" to "friendAccepted", "body" to "accepted your friend request", "createdAt" to mapOf(".sv" to "timestamp"), "read" to false)
-        )
-        button.isEnabled = false
-        FirebaseData.database.reference.updateChildren(updates)
-            .addOnSuccessListener { button.text = "Friends" }
-            .addOnFailureListener {
-                button.isEnabled = true
-                Toast.makeText(this, it.localizedMessage ?: "Could not confirm friend request", Toast.LENGTH_LONG).show()
-            }
+    override fun onStart() {
+        super.onStart()
+        if (me.isNotBlank()) state.attach(listeners)
     }
 
-    private fun addNotification(recipient: String, sender: String, body: String) {
-        val reference = FirebaseData.database.getReference("notifications").child(recipient).push()
-        reference.setValue(mapOf("senderId" to sender, "type" to "friendRequest", "body" to body, "createdAt" to mapOf(".sv" to "timestamp"), "read" to false))
+    override fun onStop() {
+        listeners.removeAll()
+        super.onStop()
     }
 
     override fun onDestroy() {
