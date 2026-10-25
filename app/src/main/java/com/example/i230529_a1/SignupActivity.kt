@@ -41,7 +41,7 @@ class SignupActivity : AppCompatActivity() {
         password.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                val value = s.orEmpty().toString()
+                val value = s?.toString().orEmpty()
                 val score = listOf(value.length >= 8, value.any { it.isUpperCase() }, value.any { it.isDigit() }, value.any { !it.isLetterOrDigit() }).count { it }
                 strength.text = when {
                     value.isEmpty() -> "Enter a password"

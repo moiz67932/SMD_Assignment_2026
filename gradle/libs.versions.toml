@@ -12,6 +12,7 @@ constraintlayout = "2.2.2"
 googleGmsGoogleServices = "4.5.0"
 firebaseBom = "35.0.2"
 agoraRtc = "4.7.0"
+kotlin = "2.4.10"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -32,4 +33,5 @@ agora-rtc = { group = "io.agora.rtc", name = "full-sdk", version.ref = "agoraRtc
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 google-gms-google-services = { id = "com.google.gms.google-services", version.ref = "googleGmsGoogleServices" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 
