@@ -13,6 +13,8 @@ googleGmsGoogleServices = "4.5.0"
 firebaseBom = "35.0.2"
 agoraRtc = "4.7.0"
 kotlin = "2.4.10"
+glide = "5.0.9"
+exifinterface = "1.4.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -28,6 +30,8 @@ firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.r
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
 firebase-database = { group = "com.google.firebase", name = "firebase-database" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
+glide = { group = "com.github.bumptech.glide", name = "glide", version.ref = "glide" }
+androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterface", version.ref = "exifinterface" }
 agora-rtc = { group = "io.agora.rtc", name = "full-sdk", version.ref = "agoraRtc" }
 
 [plugins]

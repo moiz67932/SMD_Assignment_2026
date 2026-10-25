@@ -13,10 +13,10 @@ class MenuActivity : AppCompatActivity() {
         setContentView(R.layout.activity_menu)
 
         FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
-            FirebaseData.users.child(uid).get().addOnSuccessListener { profile ->
+            FirebaseData.profiles.child(uid).get().addOnSuccessListener { profile ->
                 val name = profile.child("name").getValue(String::class.java).orEmpty()
                 findViewById<TextView>(R.id.menuProfileName).text = name
-                findViewById<TextView>(R.id.menuProfileAvatar).text = name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("")
+                AvatarBinder.bind(findViewById(R.id.menuProfileAvatar), name, profile.child("photo").getValue(String::class.java))
             }
         }
 

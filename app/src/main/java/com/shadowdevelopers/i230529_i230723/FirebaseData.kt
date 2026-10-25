@@ -18,4 +18,10 @@ object FirebaseData {
     val callRequests = database.getReference("callRequests")
     val callLogs = database.getReference("callLogs")
     val marketplaceItems = database.getReference("marketplaceItems")
+
+    /** Difference between the Firebase server clock and this phone's clock (kept up to date by KinnectApplication). */
+    @Volatile var serverTimeOffset = 0L
+
+    /** Server-adjusted "now", so the 24 h story expiry and the 5 minute edit window don't trust the phone clock. */
+    fun now() = System.currentTimeMillis() + serverTimeOffset
 }

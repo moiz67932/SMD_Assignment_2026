@@ -61,6 +61,10 @@ dependencies {
     implementation(libs.firebase.database)
     implementation(libs.firebase.messaging)
     implementation(libs.agora.rtc)
+    // Glide: loads Cloudinary image URLs into ImageViews and avatars.
+    implementation(libs.glide)
+    // ExifInterface: reads photo rotation so uploads are not sideways.
+    implementation(libs.androidx.exifinterface)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)

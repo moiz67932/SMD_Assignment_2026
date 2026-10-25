@@ -2,4 +2,6 @@
 <resources>
     <!-- View tag used by Insets.apply so padding is only added once per screen. -->
     <item name="insetsApplied" type="id" />
+    <!-- AvatarBinder keeps each avatar's original circle drawable here. -->
+    <item name="avatarOriginalBackground" type="id" />
 </resources>

@@ -18,6 +18,13 @@ class KinnectApplication : Application(), Application.ActivityLifecycleCallbacks
     override fun onCreate() {
         super.onCreate()
         registerActivityLifecycleCallbacks(this)
+        FirebaseData.database.getReference(".info/serverTimeOffset").addValueEventListener(object : com.google.firebase.database.ValueEventListener {
+            override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
+                FirebaseData.serverTimeOffset = snapshot.getValue(Long::class.java) ?: 0L
+            }
+
+            override fun onCancelled(error: com.google.firebase.database.DatabaseError) = Unit
+        })
     }
 
     override fun onActivityStarted(activity: Activity) {
