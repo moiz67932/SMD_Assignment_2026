@@ -15,3 +15,16 @@
 local.properties
 /app/google-services.json
 /agora.properties
+
+# Secrets and local config (never commit)
+google-services.json
+agora.properties
+media.properties
+fcm-server/node_modules/
+fcm-server/.env
+fcm-server/serviceAccountKey*.json
+*.jks
+*.keystore
+
+# IDE
+.idea/

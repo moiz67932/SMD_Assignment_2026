@@ -1,0 +1,4 @@
+# Copy to media.properties (git-ignored) and fill in.
+# Cloudinary console > Settings > Upload > Upload presets > add an UNSIGNED preset.
+cloudName=YOUR_CLOUD_NAME
+uploadPreset=YOUR_UNSIGNED_PRESET

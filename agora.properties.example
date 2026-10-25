@@ -1,0 +1,4 @@
+# Copy to agora.properties (git-ignored) and fill in.
+# Agora console > Project > App ID. Use a project in "Testing mode" (App ID only, no certificate),
+# because the app joins with a null token and uses the call id as the channel name.
+appId=YOUR_AGORA_APP_ID

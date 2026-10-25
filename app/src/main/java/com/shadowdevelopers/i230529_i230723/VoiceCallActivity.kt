@@ -98,9 +98,9 @@ class VoiceCallActivity : AppCompatActivity() {
         findViewById<View>(R.id.muteButton).setOnClickListener { toggleMute() }
         findViewById<View>(R.id.speakerButton).setOnClickListener { toggleSpeaker() }
         cameraButton.setOnClickListener { toggleCamera() }
-        if (BuildConfig.AGORA_APP_ID.isBlank() || BuildConfig.AGORA_TEMP_TOKEN.isBlank() || callId.isBlank()) {
+        if (BuildConfig.AGORA_APP_ID.isBlank() || callId.isBlank()) {
             statusText.text = "Call setup is incomplete"
-            Toast.makeText(this, "Add Agora App ID and a valid temporary token for channel $channel to agora.properties", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Add your Agora App ID to agora.properties to enable calls", Toast.LENGTH_LONG).show()
             finish()
             return
         }
@@ -139,7 +139,7 @@ class VoiceCallActivity : AppCompatActivity() {
                 autoSubscribeAudio = true
                 autoSubscribeVideo = videoCall
             }
-            rtc.joinChannel(BuildConfig.AGORA_TEMP_TOKEN, channel, 0, options)
+            rtc.joinChannel(null, channel, 0, options)
         } catch (error: Exception) {
             statusText.text = "Could not start call"
             Toast.makeText(this, error.localizedMessage ?: "Agora initialization failed", Toast.LENGTH_LONG).show()

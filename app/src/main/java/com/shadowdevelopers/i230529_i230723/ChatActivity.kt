@@ -281,8 +281,8 @@ class ChatActivity : AppCompatActivity() {
 
     private fun startCall(video: Boolean) {
         val uid = currentUser?.uid ?: return
-        if (otherUid.isBlank() || BuildConfig.AGORA_APP_ID.isBlank() || BuildConfig.AGORA_TEMP_TOKEN.isBlank()) {
-            Toast.makeText(this, "Add an Agora App ID and temporary channel token in ignored agora.properties", Toast.LENGTH_LONG).show()
+        if (otherUid.isBlank() || BuildConfig.AGORA_APP_ID.isBlank()) {
+            Toast.makeText(this, "Add your Agora App ID to agora.properties to enable calls", Toast.LENGTH_LONG).show()
             return
         }
         val callId = FirebaseData.callRequests.child(otherUid).push().key ?: return

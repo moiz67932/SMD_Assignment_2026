@@ -10,6 +10,12 @@ val agoraProperties = Properties().apply {
     if (config.exists()) config.inputStream().use { load(it) }
 }
 
+// Cloudinary cloud name + unsigned upload preset (see media.properties.example).
+val mediaProperties = Properties().apply {
+    val config = rootProject.file("media.properties")
+    if (config.exists()) config.inputStream().use { load(it) }
+}
+
 fun String.asBuildConfigString() = "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 android {
@@ -27,7 +33,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "AGORA_APP_ID", (agoraProperties.getProperty("appId") ?: "").asBuildConfigString())
-        buildConfigField("String", "AGORA_TEMP_TOKEN", (agoraProperties.getProperty("temporaryToken") ?: "").asBuildConfigString())
+        buildConfigField("String", "MEDIA_CLOUD_NAME", (mediaProperties.getProperty("cloudName") ?: "").asBuildConfigString())
+        buildConfigField("String", "MEDIA_UPLOAD_PRESET", (mediaProperties.getProperty("uploadPreset") ?: "").asBuildConfigString())
     }
 
     buildTypes {
