@@ -178,7 +178,7 @@
                     android:gravity="center">
 
                     <TextView
-                        android:id="@+id/aishaMutualFriendButton"
+                        android:id="@+id/mutualAvatar1"
                         style="@style/Avatar"
                         android:layout_width="30dp"
                         android:layout_height="30dp"
@@ -187,7 +187,7 @@
                         android:textSize="8sp" />
 
                     <TextView
-                        android:id="@+id/linaMutualFriendButton"
+                        android:id="@+id/mutualAvatar2"
                         style="@style/Avatar"
                         android:layout_width="30dp"
                         android:layout_height="30dp"
@@ -197,7 +197,7 @@
                         android:textSize="8sp" />
 
                     <TextView
-                        android:id="@+id/zainMutualFriendButton"
+                        android:id="@+id/mutualAvatar3"
                         style="@style/Avatar"
                         android:layout_width="30dp"
                         android:layout_height="30dp"

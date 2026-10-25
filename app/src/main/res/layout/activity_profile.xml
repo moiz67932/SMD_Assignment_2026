@@ -393,7 +393,7 @@
                 android:layout_height="152dp">
 
                 <TextView
-                    android:id="@+id/linaFriendButton"
+                    android:id="@+id/profileFriend1"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
                     android:layout_weight="1"
@@ -404,7 +404,7 @@
                     android:textSize="30sp" />
 
                 <TextView
-                    android:id="@+id/aishaFriendButton"
+                    android:id="@+id/profileFriend2"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
                     android:layout_marginStart="7dp"
@@ -416,7 +416,7 @@
                     android:textSize="30sp" />
 
                 <TextView
-                    android:id="@+id/omarFriendButton"
+                    android:id="@+id/profileFriend3"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
                     android:layout_marginStart="7dp"

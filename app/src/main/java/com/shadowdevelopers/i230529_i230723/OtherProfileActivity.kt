@@ -3,25 +3,23 @@ package com.shadowdevelopers.i230529_i230723
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.ValueEventListener
 
+/** Other profile (17): another user's cover, bio, friend count, mutual friends, photos and the friend button. */
 class OtherProfileActivity : AppCompatActivity() {
     private val currentUid by lazy { FirebaseAuth.getInstance().currentUser?.uid }
-    private lateinit var personUid: String
-    private lateinit var personName: String
+    private val listeners = ListenerBag()
+    private val mutualAvatarIds = listOf(R.id.mutualAvatar1, R.id.mutualAvatar2, R.id.mutualAvatar3)
+    private val photoIds = listOf(R.id.otherPhoto1, R.id.otherPhoto2, R.id.otherPhoto3)
+    private var personUid = ""
+    private var personName = ""
+    private val otherFriends = mutableSetOf<String>()
+    private val myFriends = mutableSetOf<String>()
     private lateinit var actionLabel: TextView
-    private var profileListener: ValueEventListener? = null
-    private var friendsListener: ValueEventListener? = null
-    private var otherFriendsListener: ValueEventListener? = null
-    private var friendStatusListener: ValueEventListener? = null
-    private var incomingRequestListener: ValueEventListener? = null
-    private var outgoingRequestListener: ValueEventListener? = null
-    private val mutualCardIds = listOf(R.id.aishaMutualFriendButton, R.id.linaMutualFriendButton, R.id.zainMutualFriendButton)
     private var isAlreadyFriend = false
     private var hasIncomingRequest = false
     private var hasOutgoingRequest = false
@@ -30,100 +28,112 @@ class OtherProfileActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_other_profile)
         personUid = intent.getStringExtra("person_uid").orEmpty()
-        personName = intent.getStringExtra("person_name") ?: "Kinnect member"
+        personName = intent.getStringExtra("person_name").orEmpty()
         actionLabel = findViewById(R.id.friendActionLabel)
         findViewById<View>(R.id.backButton).setOnClickListener { finish() }
         findViewById<View>(R.id.searchButton).setOnClickListener { startActivity(Intent(this, SearchActivity::class.java)) }
-        findViewById<TextView>(R.id.otherProfileWork).text = ""
-        findViewById<TextView>(R.id.otherProfileLocation).text = ""
-        findViewById<TextView>(R.id.otherProfileJoined).text = ""
-        mutualCardIds.forEach { findViewById<View>(it).visibility = View.GONE }
-
-        if (personUid.isNotBlank()) loadProfile()
+        mutualAvatarIds.forEach { findViewById<View>(it).visibility = View.GONE }
+        listOf(R.id.otherProfileWork, R.id.otherProfileLocation, R.id.otherProfileJoined).forEach { (findViewById<View>(it).parent as View).visibility = View.GONE }
+        if (personUid.isBlank()) {
+            Toast.makeText(this, "This profile is not available", Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
+        if (personUid == currentUid) {
+            // Opening yourself from a list goes to your own Profile (15).
+            startActivity(Intent(this, ProfileActivity::class.java))
+            finish()
+            return
+        }
         findViewById<View>(R.id.friendActionButton).setOnClickListener { performFriendAction() }
         findViewById<View>(R.id.messageButton).setOnClickListener {
-            val intent = Intent(this, ChatActivity::class.java)
-            intent.putExtra("person_uid", personUid)
-            intent.putExtra("person_name", personName)
-            startActivity(intent)
+            startActivity(Intent(this, ChatActivity::class.java).putExtra("person_uid", personUid).putExtra("person_name", personName))
         }
     }
 
-    private fun loadProfile() {
-        val profileReference = FirebaseData.profiles.child(personUid)
-        val profileObserver = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                personName = snapshot.child("name").getValue(String::class.java) ?: "Kinnect member"
-                findViewById<TextView>(R.id.otherToolbarName).text = personName
-                findViewById<TextView>(R.id.otherProfileName).text = personName
-                findViewById<TextView>(R.id.otherProfileAvatar).text = initials(personName)
-                findViewById<TextView>(R.id.otherProfileBio).text = snapshot.child("bio").getValue(String::class.java).orEmpty()
-            }
-            override fun onCancelled(error: com.google.firebase.database.DatabaseError) = Unit
-        }
-        profileListener = profileObserver
-        profileReference.addValueEventListener(profileObserver)
-
+    override fun onStart() {
+        super.onStart()
         val uid = currentUid ?: return
-        val otherFriends = mutableSetOf<String>()
-        val currentFriends = mutableSetOf<String>()
-        val mutualUpdater = {
-            val mutualIds = otherFriends.intersect(currentFriends).toList()
-            val count = mutualIds.size
-            findViewById<TextView>(R.id.otherProfileStats).text = "${otherFriends.size} friends · $count mutual"
-            findViewById<TextView>(R.id.otherMutualFriendNames).text = if (count == 0) "No mutual friends" else "$count mutual friends"
-            mutualCardIds.forEachIndexed { index, viewId ->
-                val card = findViewById<TextView>(viewId)
-                val friendUid = mutualIds.getOrNull(index)
-                card.visibility = if (friendUid == null) View.GONE else View.VISIBLE
-                if (friendUid != null) {
-                    card.setOnClickListener {
-                        startActivity(Intent(this@OtherProfileActivity, OtherProfileActivity::class.java).putExtra("person_uid", friendUid))
-                    }
-                    FirebaseData.profiles.child(friendUid).get().addOnSuccessListener { profile ->
-                        val name = profile.child("name").getValue(String::class.java).orEmpty()
-                        card.text = initials(name)
-                    }
+        if (personUid.isBlank() || personUid == uid) return
+        listeners.value(FirebaseData.profiles.child(personUid)) { snapshot ->
+            val profile = ProfileCache.from(snapshot)
+            ProfileCache.put(profile)
+            personName = profile.name
+            findViewById<TextView>(R.id.otherToolbarName).text = profile.name
+            findViewById<TextView>(R.id.otherProfileName).text = profile.name
+            findViewById<TextView>(R.id.otherProfileBio).apply {
+                text = profile.bio
+                visibility = if (profile.bio.isBlank()) View.GONE else View.VISIBLE
+            }
+            AvatarBinder.bind(findViewById(R.id.otherProfileAvatar), profile.name, profile.photo)
+            val cover = findViewById<ImageView>(R.id.otherCoverImage)
+            if (profile.cover.isBlank()) cover.setImageDrawable(null) else MediaLoader.load(cover, profile.cover)
+        }
+        listeners.value(FirebaseData.friends.child(personUid)) { snapshot ->
+            otherFriends.clear()
+            snapshot.children.forEach { if (it.getValue(Boolean::class.java) == true) otherFriends.add(it.key.orEmpty()) }
+            showMutualFriends()
+        }
+        listeners.value(FirebaseData.friends.child(uid)) { snapshot ->
+            myFriends.clear()
+            snapshot.children.forEach { if (it.getValue(Boolean::class.java) == true) myFriends.add(it.key.orEmpty()) }
+            showMutualFriends()
+        }
+        listeners.value(FirebaseData.friends.child(uid).child(personUid)) { isAlreadyFriend = it.getValue(Boolean::class.java) == true; updateFriendActionLabel() }
+        listeners.value(FirebaseData.friendRequests.child(uid).child(personUid)) { hasIncomingRequest = it.exists(); updateFriendActionLabel() }
+        listeners.value(FirebaseData.friendRequests.child(personUid).child(uid)) { hasOutgoingRequest = it.exists(); updateFriendActionLabel() }
+        // Photos: the images from this person's latest posts (posts are readable by any signed-in user).
+        listeners.value(FirebaseData.posts.orderByChild("authorId").equalTo(personUid).limitToLast(30)) { snapshot ->
+            val images = snapshot.children.sortedByDescending { it.child("createdAt").getValue(Long::class.java) ?: 0L }
+                .flatMap { post -> post.child("images").children.mapNotNull { it.getValue(String::class.java) } }
+            photoIds.forEachIndexed { index, id ->
+                val view = findViewById<ImageView>(id)
+                val ref = images.getOrNull(index)
+                view.visibility = if (ref == null) View.INVISIBLE else View.VISIBLE
+                if (ref != null) MediaLoader.load(view, ref)
+            }
+            findViewById<View>(R.id.otherPhotosGrid).visibility = if (images.isEmpty()) View.GONE else View.VISIBLE
+            findViewById<View>(R.id.otherPhotosEmpty).visibility = if (images.isEmpty()) View.VISIBLE else View.GONE
+        }
+    }
+
+    override fun onStop() {
+        listeners.removeAll()
+        super.onStop()
+    }
+
+    /** Friend count, mutual count (set intersection) and up to three mutual friends' avatars and names. */
+    private fun showMutualFriends() {
+        val mutual = otherFriends.intersect(myFriends).toList()
+        val friendsLabel = if (otherFriends.size == 1) "1 friend" else "${otherFriends.size} friends"
+        findViewById<TextView>(R.id.otherProfileStats).text = "$friendsLabel · ${mutual.size} mutual"
+        val namesView = findViewById<TextView>(R.id.otherMutualFriendNames)
+        if (mutual.isEmpty()) namesView.text = "No mutual friends"
+        val names = arrayOfNulls<String>(minOf(2, mutual.size))
+        mutualAvatarIds.forEachIndexed { index, viewId ->
+            val avatar = findViewById<TextView>(viewId)
+            val friendUid = mutual.getOrNull(index)
+            avatar.visibility = if (friendUid == null) View.GONE else View.VISIBLE
+            if (friendUid == null) return@forEachIndexed
+            avatar.setOnClickListener { startActivity(Intent(this, OtherProfileActivity::class.java).putExtra("person_uid", friendUid)) }
+            ProfileCache.get(friendUid) { profile ->
+                AvatarBinder.bind(avatar, profile.name, profile.photo)
+                if (index < names.size) {
+                    names[index] = profile.name
+                    if (names.all { it != null }) namesView.text = mutualSentence(names.filterNotNull(), mutual.size)
                 }
             }
         }
-        val otherObserver = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                otherFriends.clear()
-                snapshot.children.forEach { if (it.getValue(Boolean::class.java) == true) otherFriends.add(it.key.orEmpty()) }
-                mutualUpdater()
-            }
-            override fun onCancelled(error: com.google.firebase.database.DatabaseError) = Unit
-        }
-        otherFriendsListener = otherObserver
-        FirebaseData.friends.child(personUid).addValueEventListener(otherObserver)
-        val currentObserver = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                currentFriends.clear()
-                snapshot.children.forEach { if (it.getValue(Boolean::class.java) == true) currentFriends.add(it.key.orEmpty()) }
-                mutualUpdater()
-            }
-            override fun onCancelled(error: com.google.firebase.database.DatabaseError) = Unit
-        }
-        FirebaseData.friends.child(uid).addValueEventListener(currentObserver)
-        friendsListener = currentObserver
-
-        friendStatusListener = observeStatus(FirebaseData.friends.child(uid).child(personUid)) { isAlreadyFriend = it }
-        incomingRequestListener = observeStatus(FirebaseData.friendRequests.child(uid).child(personUid)) { hasIncomingRequest = it }
-        outgoingRequestListener = observeStatus(FirebaseData.friendRequests.child(personUid).child(uid)) { hasOutgoingRequest = it }
     }
 
-    private fun observeStatus(reference: com.google.firebase.database.DatabaseReference, update: (Boolean) -> Unit): ValueEventListener {
-        val observer = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val value = snapshot.value
-                update(snapshot.exists() && (value !is Boolean || value))
-                updateFriendActionLabel()
-            }
-            override fun onCancelled(error: com.google.firebase.database.DatabaseError) = Unit
+    /** "Friends with Aisha Khan", "Friends with A and B", "Friends with A, B and 36 others". */
+    private fun mutualSentence(names: List<String>, total: Int): String {
+        val others = total - names.size
+        return when {
+            others > 0 -> "Friends with ${names.joinToString(", ")} and $others ${if (others == 1) "other" else "others"}"
+            names.size == 2 -> "Friends with ${names[0]} and ${names[1]}"
+            else -> "Friends with ${names.first()}"
         }
-        reference.addValueEventListener(observer)
-        return observer
     }
 
     private fun updateFriendActionLabel() {
@@ -137,14 +147,13 @@ class OtherProfileActivity : AppCompatActivity() {
 
     private fun performFriendAction() {
         val uid = currentUid ?: return
-        if (personUid.isBlank() || uid == personUid) return
         when (actionLabel.text.toString()) {
             "Add friend" -> {
                 val request = mapOf<String, Any>("senderId" to uid, "receiverId" to personUid, "createdAt" to mapOf(".sv" to "timestamp"))
                 FirebaseData.friendRequests.child(personUid).child(uid).setValue(request)
                     .addOnSuccessListener {
-                        val notification = FirebaseData.database.getReference("notifications").child(personUid).push()
-                        notification.setValue(mapOf("senderId" to uid, "type" to "friendRequest", "body" to "sent you a friend request", "createdAt" to mapOf(".sv" to "timestamp"), "read" to false))
+                        FirebaseData.database.getReference("notifications").child(personUid).push()
+                            .setValue(mapOf("senderId" to uid, "type" to "friendRequest", "body" to "sent you a friend request", "createdAt" to mapOf(".sv" to "timestamp"), "read" to false))
                     }.addOnFailureListener { Toast.makeText(this, it.localizedMessage ?: "Could not send request", Toast.LENGTH_LONG).show() }
             }
             "Confirm" -> {
@@ -160,20 +169,5 @@ class OtherProfileActivity : AppCompatActivity() {
             }
             "Requested" -> FirebaseData.friendRequests.child(personUid).child(uid).removeValue()
         }
-    }
-
-    private fun initials(name: String) = name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("")
-
-    override fun onDestroy() {
-        profileListener?.let { FirebaseData.profiles.child(personUid).removeEventListener(it) }
-        val uid = currentUid
-        if (uid != null) {
-            friendsListener?.let { FirebaseData.friends.child(uid).removeEventListener(it) }
-            friendStatusListener?.let { FirebaseData.friends.child(uid).child(personUid).removeEventListener(it) }
-            incomingRequestListener?.let { FirebaseData.friendRequests.child(uid).child(personUid).removeEventListener(it) }
-            outgoingRequestListener?.let { FirebaseData.friendRequests.child(personUid).child(uid).removeEventListener(it) }
-        }
-        otherFriendsListener?.let { FirebaseData.friends.child(personUid).removeEventListener(it) }
-        super.onDestroy()
     }
 }
