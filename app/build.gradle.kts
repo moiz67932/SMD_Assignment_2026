@@ -13,13 +13,13 @@ val agoraProperties = Properties().apply {
 fun String.asBuildConfigString() = "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 android {
-    namespace = "com.example.i230529_a1"
+    namespace = "com.shadowdevelopers.i230529_i230723"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.example.i230529_i230723_a2"
+        applicationId = "com.shadowdevelopers.i230529_i230723"
         minSdk = 24
         targetSdk = 37
         versionCode = 1

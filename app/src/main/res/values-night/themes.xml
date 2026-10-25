@@ -1,5 +1,5 @@
 <resources>
-    <style name="Theme.I230529_A1" parent="Theme.AppCompat.Light.NoActionBar">
+    <style name="Theme.Kinnect" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:statusBarColor">@color/screen_background</item><item name="android:navigationBarColor">@color/white</item>
         <item name="android:colorAccent">@color/primary</item>
