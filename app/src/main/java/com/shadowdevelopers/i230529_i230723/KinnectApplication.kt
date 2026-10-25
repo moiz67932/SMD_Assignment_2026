@@ -21,6 +21,7 @@ class KinnectApplication : Application(), Application.ActivityLifecycleCallbacks
     }
 
     override fun onActivityStarted(activity: Activity) {
+        Insets.apply(activity)
         startedActivities++
         handler.removeCallbacks(markOffline)
         if (FirebaseAuth.getInstance().currentUser != null) connectPresence()
@@ -69,7 +70,7 @@ class KinnectApplication : Application(), Application.ActivityLifecycleCallbacks
         reference.setValue(mapOf("online" to false, "lastSeen" to mapOf(".sv" to "timestamp"))).addOnCompleteListener { onComplete() }
     }
 
-    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Insets.prepare(activity)
     override fun onActivityResumed(activity: Activity) = Unit
     override fun onActivityPaused(activity: Activity) = Unit
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit

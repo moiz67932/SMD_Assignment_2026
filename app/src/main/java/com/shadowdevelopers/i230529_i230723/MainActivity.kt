@@ -40,8 +40,4 @@ class MainActivity : AppCompatActivity() {
         startActivity(intent)
         finish()
     }
-
-    override fun onBackPressed() {
-        if (!navigated) super.onBackPressed()
-    }
 }

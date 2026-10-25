@@ -1,7 +1,10 @@
 <resources>
+    <!-- Edge-to-edge: bars are transparent and each screen pads itself (see Insets.kt). -->
     <style name="Theme.Kinnect" parent="Theme.AppCompat.Light.NoActionBar">
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:statusBarColor">@color/screen_background</item>
-        <item name="android:navigationBarColor">@color/white</item><item name="android:colorAccent">@color/primary</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+        <item name="android:colorAccent">@color/primary</item>
+        <item name="colorAccent">@color/primary</item>
     </style>
 </resources>
