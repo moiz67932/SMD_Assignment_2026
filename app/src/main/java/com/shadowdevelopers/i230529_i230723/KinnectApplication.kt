@@ -30,6 +30,7 @@ class KinnectApplication : Application(), Application.ActivityLifecycleCallbacks
     override fun onActivityStarted(activity: Activity) {
         Insets.apply(activity)
         startedActivities++
+        ExternalLaunch.clear()
         handler.removeCallbacks(markOffline)
         if (FirebaseAuth.getInstance().currentUser != null) connectPresence()
     }
@@ -42,7 +43,14 @@ class KinnectApplication : Application(), Application.ActivityLifecycleCallbacks
         }
     }
 
-    private val markOffline = Runnable { setOffline() }
+    // Grace period before going offline; skipped entirely while a camera/gallery/picker is open for us.
+    private val markOffline: Runnable = object : Runnable {
+        override fun run() {
+            if (startedActivities > 0) return
+            if (ExternalLaunch.active()) handler.postDelayed(this, 30_000) // check again once the picker is likely closed
+            else setOffline()
+        }
+    }
 
     private fun connectPresence() {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
