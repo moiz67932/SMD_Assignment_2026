@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- First tile of the Home stories row: Create story (opens Camera 09). -->
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="94dp"
+    android:layout_height="142dp"
+    android:layout_marginEnd="8dp"
+    android:background="@drawable/rounded_white">
+
+    <TextView
+        android:id="@+id/createStoryAvatar"
+        android:layout_width="match_parent"
+        android:layout_height="82dp"
+        android:background="@color/teal_soft"
+        android:gravity="center"
+        android:textColor="@color/primary"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <ImageView
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="67dp"
+        android:background="@drawable/circle_teal"
+        android:contentDescription="Create story"
+        android:padding="6dp"
+        android:src="@drawable/ic_add"
+        android:tint="@color/white" />
+
+    <TextView
+        style="@style/Meta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="10dp"
+        android:gravity="center"
+        android:text="Create story"
+        android:textColor="@color/text_primary"
+        android:textStyle="bold" />
+
+</RelativeLayout>

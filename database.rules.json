@@ -59,7 +59,8 @@
       "$postId": {
         ".read": "auth != null",
         "$uid": {
-          ".write": "auth != null && auth.uid === $uid"
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isString() && newData.val().matches(/^(Like|Love|Laugh|Wow|Sad|Angry)$/)"
         }
       }
     },
@@ -83,17 +84,44 @@
     "stories": {
       "$uid": {
         "public": {
-          ".read": "auth != null",
+          ".read": "auth != null && (auth.uid === $uid || root.child('friends').child($uid).child(auth.uid).val() === true)",
           ".indexOn": ["expiresAt"],
           "$storyId": {
-            ".write": "auth != null && auth.uid === $uid"
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['mediaRef', 'type', 'audience', 'createdAt', 'expiresAt']) && newData.child('mediaRef').isString() && newData.child('mediaRef').val().matches(/^https:\\/\\//) && newData.child('type').val().matches(/^(image|video)$/) && newData.child('expiresAt').isNumber() && (!newData.child('label').exists() || (newData.child('label').isString() && newData.child('label').val().length <= 80))"
           }
         },
         "closeFriends": {
-          ".read": "auth != null && (auth.uid === $uid || root.child('closeFriends').child($uid).child(auth.uid).exists())",
+          ".read": "auth != null && (auth.uid === $uid || root.child('closeFriends').child($uid).child(auth.uid).val() === true)",
           ".indexOn": ["expiresAt"],
           "$storyId": {
-            ".write": "auth != null && auth.uid === $uid"
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['mediaRef', 'type', 'audience', 'createdAt', 'expiresAt']) && newData.child('mediaRef').isString() && newData.child('mediaRef').val().matches(/^https:\\/\\//) && newData.child('type').val().matches(/^(image|video)$/) && newData.child('expiresAt').isNumber() && (!newData.child('label').exists() || (newData.child('label').isString() && newData.child('label').val().length <= 80))"
+          }
+        }
+      }
+    },
+    "storyViews": {
+      "$owner": {
+        ".read": "auth != null && auth.uid === $owner",
+        "$storyId": {
+          ".write": "auth != null && auth.uid === $owner && !newData.exists()",
+          "$viewer": {
+            ".read": "auth != null && auth.uid === $viewer",
+            ".write": "auth != null && auth.uid === $viewer && $viewer !== $owner",
+            ".validate": "newData.isNumber()"
+          }
+        }
+      }
+    },
+    "storyReactions": {
+      "$owner": {
+        ".read": "auth != null && auth.uid === $owner",
+        "$storyId": {
+          ".write": "auth != null && auth.uid === $owner && !newData.exists()",
+          "$viewer": {
+            ".write": "auth != null && auth.uid === $viewer && $viewer !== $owner",
+            ".validate": "newData.isString() && newData.val().matches(/^(Like|Love|Laugh)$/)"
           }
         }
       }

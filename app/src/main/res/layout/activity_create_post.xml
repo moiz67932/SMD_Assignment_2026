@@ -160,20 +160,22 @@
         android:textColor="@color/text_primary"
         android:textSize="21sp" />
 
-    <ImageView
-        android:id="@+id/postMediaPreview"
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/postMediaList"
         android:layout_width="match_parent"
-        android:layout_height="130dp"
-        android:scaleType="centerCrop"
+        android:layout_height="104dp"
+        android:clipToPadding="false"
+        android:paddingHorizontal="12dp"
         android:visibility="gone" />
 
     <TextView
-        android:id="@+id/postMediaNotice"
+        android:id="@+id/postUploadStatus"
         style="@style/Meta"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:text="Preview only. Cross-device media sharing needs an external media host."
+        android:paddingVertical="4dp"
+        android:textColor="@color/primary"
         android:visibility="gone" />
 
     <HorizontalScrollView
@@ -188,6 +190,7 @@
             android:gravity="center_vertical">
 
             <TextView
+                android:id="@+id/postColor0"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:background="@drawable/button_outline"
@@ -197,6 +200,7 @@
                 android:textStyle="bold" />
 
             <View
+                android:id="@+id/postColor1"
                 android:layout_width="38dp"
                 android:layout_height="38dp"
                 android:layout_marginStart="8dp"
@@ -204,6 +208,7 @@
                 android:backgroundTint="@color/primary" />
 
             <View
+                android:id="@+id/postColor2"
                 android:layout_width="38dp"
                 android:layout_height="38dp"
                 android:layout_marginStart="8dp"
@@ -211,6 +216,7 @@
                 android:backgroundTint="#C44C29" />
 
             <View
+                android:id="@+id/postColor3"
                 android:layout_width="38dp"
                 android:layout_height="38dp"
                 android:layout_marginStart="8dp"
@@ -218,6 +224,7 @@
                 android:backgroundTint="#4E5898" />
 
             <View
+                android:id="@+id/postColor4"
                 android:layout_width="38dp"
                 android:layout_height="38dp"
                 android:layout_marginStart="8dp"
@@ -225,6 +232,7 @@
                 android:backgroundTint="@color/green" />
 
             <View
+                android:id="@+id/postColor5"
                 android:layout_width="38dp"
                 android:layout_height="38dp"
                 android:layout_marginStart="8dp"
@@ -232,6 +240,7 @@
                 android:backgroundTint="#D18D08" />
 
             <View
+                android:id="@+id/postColor6"
                 android:layout_width="38dp"
                 android:layout_height="38dp"
                 android:layout_marginStart="8dp"
@@ -239,6 +248,7 @@
                 android:backgroundTint="@color/purple" />
 
             <View
+                android:id="@+id/postColor7"
                 android:layout_width="38dp"
                 android:layout_height="38dp"
                 android:layout_marginStart="8dp"
@@ -294,6 +304,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/tagPeopleButton"
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:gravity="center_vertical">
@@ -316,6 +327,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/feelingButton"
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:gravity="center_vertical">
@@ -338,6 +350,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/checkInButton"
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:gravity="center_vertical">
@@ -360,6 +373,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/liveVideoButton"
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:gravity="center_vertical">
@@ -405,6 +419,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/createEventButton"
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:gravity="center_vertical">

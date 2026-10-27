@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A chosen photo in Create post (07), with a remove button. -->
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="96dp"
+    android:layout_height="96dp"
+    android:layout_marginEnd="6dp">
+
+    <ImageView
+        android:id="@+id/selectedMediaImage"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/rounded_soft"
+        android:contentDescription="Selected photo"
+        android:scaleType="centerCrop" />
+
+    <ImageView
+        android:id="@+id/selectedMediaRemove"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:layout_alignParentEnd="true"
+        android:layout_margin="4dp"
+        android:background="@drawable/circle_dark"
+        android:contentDescription="Remove photo"
+        android:padding="5dp"
+        android:src="@drawable/ic_close"
+        android:tint="@color/white" />
+
+</RelativeLayout>

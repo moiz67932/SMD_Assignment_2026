@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Your story (12): my active stories with who has seen them. Filled by YourStoryActivity. -->
 <RelativeLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -6,18 +7,36 @@
     android:background="@color/black">
 
     <ImageView
+        android:id="@+id/storyImage"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layout_above="@id/yourStoryBar"
         android:layout_margin="8dp"
-        android:scaleType="centerCrop"
-        android:src="@drawable/landscape" />
+        android:background="@drawable/rounded_dark"
+        android:contentDescription="Story"
+        android:scaleType="centerCrop" />
+
+    <VideoView
+        android:id="@+id/storyVideo"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@id/yourStoryBar"
+        android:layout_centerInParent="true"
+        android:layout_margin="8dp"
+        android:visibility="gone" />
 
     <View
+        android:id="@+id/storyTouch"
         android:layout_width="match_parent"
-        android:layout_height="3dp"
+        android:layout_height="match_parent"
+        android:layout_above="@id/yourStoryBar" />
+
+    <LinearLayout
+        android:id="@+id/storySegments"
+        android:layout_width="match_parent"
+        android:layout_height="4dp"
         android:layout_marginHorizontal="14dp"
-        android:layout_marginTop="12dp"
-        android:background="@color/white" />
+        android:layout_marginTop="12dp" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -27,10 +46,10 @@
         android:paddingHorizontal="14dp">
 
         <TextView
+            android:id="@+id/storyAvatar"
             style="@style/Avatar"
             android:layout_width="36dp"
             android:layout_height="36dp"
-            android:text="JW"
             android:textSize="10sp" />
 
         <LinearLayout
@@ -49,18 +68,18 @@
                 android:textSize="13sp" />
 
             <TextView
+                android:id="@+id/storyMeta"
                 style="@style/Meta"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="1h · Close friends"
                 android:textColor="#CCFFFFFF" />
 
         </LinearLayout>
 
         <ImageView
             android:id="@+id/doneButton"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
             android:contentDescription="Close"
             android:padding="9dp"
             android:src="@drawable/ic_close"
@@ -69,56 +88,46 @@
     </LinearLayout>
 
     <TextView
+        android:id="@+id/storyLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerInParent="true"
+        android:layout_marginHorizontal="32dp"
         android:background="@drawable/rounded_red"
+        android:gravity="center"
         android:paddingHorizontal="14dp"
         android:paddingVertical="8dp"
         android:rotation="4"
-        android:text="Saturday plans"
         android:textColor="@color/white"
         android:textSize="20sp"
-        android:textStyle="bold" />
+        android:textStyle="bold"
+        android:visibility="gone" />
 
+    <!-- Hearts float up for each Love reaction viewers sent on this story. -->
     <LinearLayout
+        android:id="@+id/yourHearts"
         android:layout_width="42dp"
         android:layout_height="190dp"
-        android:layout_centerVertical="true"
+        android:layout_above="@id/yourStoryBar"
         android:layout_marginStart="34dp"
+        android:layout_marginBottom="20dp"
         android:gravity="bottom"
-        android:orientation="vertical"
-        android:translationY="90dp">
+        android:orientation="vertical" />
 
-        <ImageView
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:alpha="0.45"
-            android:src="@drawable/reaction_love" />
-
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:layout_marginTop="8dp"
-            android:alpha="0.65"
-            android:src="@drawable/reaction_love" />
-
-        <ImageView
-            android:layout_width="31dp"
-            android:layout_height="31dp"
-            android:layout_marginTop="8dp"
-            android:alpha="0.8"
-            android:src="@drawable/reaction_love" />
-
-        <ImageView
-            android:layout_width="35dp"
-            android:layout_height="35dp"
-            android:layout_marginTop="8dp"
-            android:src="@drawable/reaction_love" />
-
-    </LinearLayout>
+    <TextView
+        android:id="@+id/yourEmpty"
+        style="@style/Heading"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:gravity="center"
+        android:padding="32dp"
+        android:text="Loading your story…"
+        android:textColor="@color/white"
+        android:visibility="gone" />
 
     <LinearLayout
+        android:id="@+id/yourStoryBar"
         android:layout_width="match_parent"
         android:layout_height="80dp"
         android:layout_alignParentBottom="true"
@@ -129,6 +138,7 @@
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="match_parent"
+            android:id="@+id/yourSeenBy"
             android:layout_weight="1.15"
             android:gravity="center"
             android:orientation="vertical">
@@ -142,8 +152,9 @@
                     style="@style/Avatar"
                     android:layout_width="24dp"
                     android:layout_height="24dp"
-                    android:background="@drawable/circle_red"
-                    android:text="AK"
+                    android:id="@+id/yourSeen1"
+                    android:visibility="gone"
+                    android:text=""
                     android:textSize="7sp" />
 
                 <TextView
@@ -151,8 +162,9 @@
                     android:layout_width="24dp"
                     android:layout_height="24dp"
                     android:layout_marginStart="-5dp"
-                    android:background="@drawable/circle_purple"
-                    android:text="LM"
+                    android:id="@+id/yourSeen2"
+                    android:visibility="gone"
+                    android:text=""
                     android:textSize="7sp" />
 
                 <TextView
@@ -160,8 +172,9 @@
                     android:layout_width="24dp"
                     android:layout_height="24dp"
                     android:layout_marginStart="-5dp"
-                    android:background="@drawable/circle_green"
-                    android:text="OF"
+                    android:id="@+id/yourSeen3"
+                    android:visibility="gone"
+                    android:text=""
                     android:textSize="7sp" />
 
             </LinearLayout>
@@ -171,12 +184,14 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="Seen by 24"
+                android:id="@+id/yourSeenCount"
+                android:text="No views yet"
                 android:textColor="@color/white" />
 
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/yourCreateButton"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
@@ -200,6 +215,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/yourHighlightButton"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
@@ -223,6 +239,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/yourSendButton"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
@@ -246,6 +263,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/yourMoreButton"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"

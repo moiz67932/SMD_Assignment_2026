@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Full-screen photo/video viewer (new screen, opened from posts, chat and the photo picker). -->
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/black">
+
+    <ImageView
+        android:id="@+id/viewerImage"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="Photo"
+        android:scaleType="fitCenter" />
+
+    <VideoView
+        android:id="@+id/viewerVideo"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_centerInParent="true"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/viewerClose"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_margin="14dp"
+        android:background="@drawable/circle_dark"
+        android:contentDescription="Close"
+        android:padding="9dp"
+        android:src="@drawable/ic_close"
+        android:tint="@color/white" />
+
+    <TextView
+        android:id="@+id/viewerCounter"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_alignParentEnd="true"
+        android:layout_margin="14dp"
+        android:background="@drawable/rounded_dark"
+        android:gravity="center"
+        android:paddingHorizontal="12dp"
+        android:textColor="@color/white"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+</RelativeLayout>

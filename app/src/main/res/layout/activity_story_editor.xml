@@ -10,8 +10,17 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_margin="8dp"
-        android:scaleType="centerCrop"
-        android:src="@drawable/landscape" />
+        android:background="@color/story_navy"
+        android:contentDescription="Story preview"
+        android:scaleType="centerCrop" />
+
+    <VideoView
+        android:id="@+id/storyVideoPreview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_centerInParent="true"
+        android:layout_margin="8dp"
+        android:visibility="gone" />
 
     <ImageView
         android:id="@+id/backButton"
@@ -34,6 +43,8 @@
         android:gravity="center_vertical">
 
         <ImageView
+            android:id="@+id/storyToolTag"
+            android:alpha="0.45"
             android:layout_width="42dp"
             android:layout_height="42dp"
             android:background="@drawable/circle_dark"
@@ -48,11 +59,14 @@
             android:layout_marginStart="6dp"
             android:background="@drawable/circle_dark"
             android:gravity="center"
+            android:id="@+id/storyTextButton"
             android:text="Aa"
             android:textColor="@color/white"
             android:textStyle="bold" />
 
         <ImageView
+            android:id="@+id/storyToolSticker"
+            android:alpha="0.45"
             android:layout_width="42dp"
             android:layout_height="42dp"
             android:layout_marginStart="6dp"
@@ -63,6 +77,8 @@
             android:tint="@color/white" />
 
         <ImageView
+            android:id="@+id/storyToolMusic"
+            android:alpha="0.45"
             android:layout_width="42dp"
             android:layout_height="42dp"
             android:layout_marginStart="6dp"
@@ -73,6 +89,8 @@
             android:tint="@color/white" />
 
         <ImageView
+            android:id="@+id/storyToolEffects"
+            android:alpha="0.45"
             android:layout_width="42dp"
             android:layout_height="42dp"
             android:layout_marginStart="6dp"
@@ -100,7 +118,22 @@
         android:textSize="20sp"
         android:textStyle="bold" />
 
+    <TextView
+        android:id="@+id/storyUploadStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_above="@id/storyShareBar"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="12dp"
+        android:background="@drawable/rounded_dark"
+        android:gravity="center"
+        android:paddingHorizontal="16dp"
+        android:textColor="@color/white"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
     <LinearLayout
+        android:id="@+id/storyShareBar"
         android:layout_width="match_parent"
         android:layout_height="78dp"
         android:layout_alignParentBottom="true"
@@ -118,10 +151,11 @@
             android:paddingHorizontal="8dp">
 
             <TextView
+                android:id="@+id/storyEditorAvatar"
                 style="@style/Avatar"
                 android:layout_width="28dp"
                 android:layout_height="28dp"
-                android:text="JW"
+                android:text=""
                 android:textSize="8sp" />
 
             <TextView

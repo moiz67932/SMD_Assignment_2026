@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One gallery tile in Photo picker (08). Teal frame + numbered badge when selected, duration for videos. -->
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/mediaTileFrame"
+    android:layout_width="match_parent"
+    android:layout_height="96dp"
+    android:padding="1dp">
+
+    <ImageView
+        android:id="@+id/mediaTileImage"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/surface_soft"
+        android:contentDescription="Gallery item"
+        android:scaleType="centerCrop" />
+
+    <TextView
+        android:id="@+id/mediaTileNumber"
+        android:layout_width="25dp"
+        android:layout_height="25dp"
+        android:layout_alignParentEnd="true"
+        android:layout_margin="6dp"
+        android:background="@drawable/selection_outline"
+        android:gravity="center"
+        android:textColor="@color/white"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/mediaTileDuration"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
+        android:layout_margin="6dp"
+        android:shadowColor="@color/black"
+        android:shadowRadius="3"
+        android:textColor="@color/white"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+</RelativeLayout>

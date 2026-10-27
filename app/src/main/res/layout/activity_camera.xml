@@ -13,12 +13,28 @@
         android:layout_weight="1">
 
         <ImageView
+            android:id="@+id/cameraPreview"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:scaleType="centerCrop"
-            android:src="@drawable/landscape" />
+            android:background="@drawable/rounded_dark"
+            android:contentDescription="Camera"
+            android:scaleType="centerCrop" />
+
+        <TextView
+            android:id="@+id/cameraHint"
+            style="@style/Heading"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:gravity="center"
+            android:paddingHorizontal="32dp"
+            android:text="Tap the shutter for a photo\nHold it for a video (up to 30 s)"
+            android:textColor="#CCFFFFFF"
+            android:textSize="14sp" />
 
         <ImageView
+            android:id="@+id/cameraSettingsButton"
+            android:alpha="0.45"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_margin="14dp"
@@ -58,6 +74,8 @@
                 android:tint="@color/white" />
 
             <ImageView
+                android:alpha="0.45"
+                android:id="@+id/cameraFlashButton"
                 android:layout_width="46dp"
                 android:layout_height="46dp"
                 android:layout_marginStart="10dp"
@@ -89,6 +107,8 @@
                 android:contentDescription="Switch camera"
                 android:padding="10dp"
                 android:src="@drawable/ic_rotate"
+                android:id="@+id/cameraSwitchButton"
+                android:alpha="0.45"
                 android:tint="@color/white" />
 
             <ImageView
@@ -99,6 +119,8 @@
                 android:contentDescription="Effects"
                 android:padding="10dp"
                 android:src="@drawable/ic_smile"
+                android:id="@+id/cameraEffectsButton"
+                android:alpha="0.45"
                 android:tint="@color/white" />
 
         </LinearLayout>
@@ -111,25 +133,8 @@
         android:gravity="center"
         android:paddingHorizontal="8dp">
 
-        <TextView
-            style="@style/Meta"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="TEXT"
-            android:textColor="#CCFFFFFF" />
-
-        <TextView
-            style="@style/Meta"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="LIVE"
-            android:textColor="#CCFFFFFF" />
-
         <LinearLayout
+            android:id="@+id/modeText"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
@@ -137,39 +142,131 @@
             android:orientation="vertical">
 
             <TextView
+                android:id="@+id/modeTextLabel"
+                style="@style/Meta"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="TEXT"
+                android:textColor="#CCFFFFFF" />
+
+            <View
+                android:id="@+id/modeTextLine"
+                android:layout_width="28dp"
+                android:layout_height="2dp"
+                android:background="@color/white"
+                android:visibility="invisible" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/modeLive"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/modeLiveLabel"
+                style="@style/Meta"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="LIVE"
+                android:textColor="#CCFFFFFF" />
+
+            <View
+                android:id="@+id/modeLiveLine"
+                android:layout_width="28dp"
+                android:layout_height="2dp"
+                android:background="@color/white"
+                android:visibility="invisible" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/modeStory"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/modeStoryLabel"
                 style="@style/Meta"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_weight="1"
                 android:gravity="center"
                 android:text="STORY"
-                android:textColor="@color/white"
-                android:textStyle="bold" />
+                android:textColor="#CCFFFFFF" />
 
             <View
+                android:id="@+id/modeStoryLine"
                 android:layout_width="28dp"
                 android:layout_height="2dp"
-                android:background="@color/white" />
+                android:background="@color/white"
+                android:visibility="invisible" />
 
         </LinearLayout>
 
-        <TextView
-            style="@style/Meta"
+        <LinearLayout
+            android:id="@+id/modePost"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="POST"
-            android:textColor="#CCFFFFFF" />
+            android:orientation="vertical">
 
-        <TextView
-            style="@style/Meta"
+            <TextView
+                android:id="@+id/modePostLabel"
+                style="@style/Meta"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="POST"
+                android:textColor="#CCFFFFFF" />
+
+            <View
+                android:id="@+id/modePostLine"
+                android:layout_width="28dp"
+                android:layout_height="2dp"
+                android:background="@color/white"
+                android:visibility="invisible" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/modeBoomerang"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1.4"
             android:gravity="center"
-            android:text="BOOMERANG"
-            android:textColor="#CCFFFFFF" />
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/modeBoomerangLabel"
+                style="@style/Meta"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="BOOMERANG"
+                android:textColor="#CCFFFFFF" />
+
+            <View
+                android:id="@+id/modeBoomerangLine"
+                android:layout_width="28dp"
+                android:layout_height="2dp"
+                android:background="@color/white"
+                android:visibility="invisible" />
+
+        </LinearLayout>
 
     </LinearLayout>
 

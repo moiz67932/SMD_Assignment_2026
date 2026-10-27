@@ -46,6 +46,8 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+        <activity android:name=".MediaViewerActivity" android:exported="false" />
+        <activity android:name=".CloseFriendsActivity" android:exported="false" />
         <activity android:name=".MarketplaceActivity" android:exported="false" />
         <activity android:name=".VoiceCallActivity" android:exported="false" />
         <activity android:name=".ChatActivity" android:exported="false" />

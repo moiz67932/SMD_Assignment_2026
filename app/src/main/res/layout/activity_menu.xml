@@ -172,6 +172,7 @@
                 android:rowCount="3">
 
                 <LinearLayout
+                    android:id="@+id/memoriesShortcut"
                     android:layout_width="0dp"
                     android:layout_height="66dp"
                     android:layout_columnWeight="1"
@@ -197,6 +198,7 @@
                 </LinearLayout>
 
                 <LinearLayout
+                    android:id="@+id/savedShortcut"
                     android:layout_width="0dp"
                     android:layout_height="66dp"
                     android:layout_columnWeight="1"
@@ -223,6 +225,7 @@
                 </LinearLayout>
 
                 <LinearLayout
+                    android:id="@+id/groupsShortcut"
                     android:layout_width="0dp"
                     android:layout_height="66dp"
                     android:layout_columnWeight="1"
@@ -304,6 +307,7 @@
                 </LinearLayout>
 
                 <LinearLayout
+                    android:id="@+id/eventsShortcut"
                     android:layout_width="0dp"
                     android:layout_height="66dp"
                     android:layout_columnWeight="1"
@@ -333,6 +337,7 @@
             </GridLayout>
 
             <TextView
+                android:id="@+id/seeMoreButton"
                 style="@style/Heading"
                 android:layout_width="match_parent"
                 android:layout_height="38dp"
@@ -343,6 +348,7 @@
                 android:textSize="11sp" />
 
             <LinearLayout
+                    android:id="@+id/helpRow"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:layout_marginTop="10dp"
@@ -372,6 +378,7 @@
             </LinearLayout>
 
             <LinearLayout
+                    android:id="@+id/settingsRow"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:layout_marginTop="5dp"
@@ -401,6 +408,7 @@
             </LinearLayout>
 
             <LinearLayout
+                    android:id="@+id/alsoFromRow"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:layout_marginTop="5dp"

@@ -1,10 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- One comment in Comments (06). Replies are indented under their parent with a thread line. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:paddingHorizontal="14dp"
-    android:paddingVertical="8dp">
+    android:paddingStart="14dp"
+    android:paddingTop="6dp"
+    android:paddingEnd="14dp"
+    android:paddingBottom="2dp">
+
+    <FrameLayout
+        android:id="@+id/commentIndent"
+        android:layout_width="44dp"
+        android:layout_height="match_parent"
+        android:visibility="gone">
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="18dp"
+            android:background="@color/divider" />
+
+    </FrameLayout>
 
     <TextView
         android:id="@+id/commentAvatar"
@@ -20,13 +37,76 @@
         android:layout_weight="1"
         android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/commentText"
-            style="@style/Body"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+        <RelativeLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                android:id="@+id/commentBubble"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/rounded_soft"
+                android:orientation="vertical"
+                android:paddingHorizontal="11dp"
+                android:paddingVertical="8dp">
+
+                <TextView
+                    android:id="@+id/commentAuthor"
+                    style="@style/Heading"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/commentText"
+                    style="@style/Body"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
+                    android:textSize="13sp" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/commentLikeBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="22dp"
+                android:layout_alignEnd="@id/commentBubble"
+                android:layout_alignBottom="@id/commentBubble"
+                android:layout_marginEnd="-10dp"
+                android:layout_marginBottom="-10dp"
+                android:background="@drawable/rounded_white"
+                android:elevation="2dp"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="5dp"
+                android:visibility="gone">
+
+                <ImageView
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:contentDescription="Likes"
+                    android:src="@drawable/reaction_like" />
+
+                <TextView
+                    android:id="@+id/commentLikeCount"
+                    style="@style/Meta"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="3dp" />
+
+            </LinearLayout>
+
+        </RelativeLayout>
+
+        <ImageView
+            android:id="@+id/commentImage"
+            android:layout_width="190dp"
+            android:layout_height="140dp"
+            android:layout_marginTop="6dp"
             android:background="@drawable/rounded_soft"
-            android:padding="10dp" />
+            android:contentDescription="Comment photo"
+            android:scaleType="centerCrop"
+            android:visibility="gone" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -36,25 +116,32 @@
             <TextView
                 android:id="@+id/commentTime"
                 style="@style/Meta"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1" />
+                android:layout_marginStart="10dp" />
 
             <TextView
                 android:id="@+id/commentLikeButton"
                 style="@style/Meta"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:paddingHorizontal="8dp"
-                android:text="Like" />
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="9dp"
+                android:text="Like"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/commentReplyButton"
                 style="@style/Meta"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:paddingHorizontal="8dp"
-                android:text="Reply" />
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="4dp"
+                android:text="Reply"
+                android:textStyle="bold" />
+
         </LinearLayout>
+
     </LinearLayout>
+
 </LinearLayout>

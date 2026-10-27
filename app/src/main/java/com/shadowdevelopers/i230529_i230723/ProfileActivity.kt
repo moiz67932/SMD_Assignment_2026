@@ -33,7 +33,8 @@ class ProfileActivity : AppCompatActivity() {
         open(R.id.findFriendsFromProfile, SearchActivity::class.java)
 
         postAdapter = PostAdapter(
-            onReaction = { post -> startActivity(Intent(this, ReactionPickerActivity::class.java).putExtra("post_id", post.id)) },
+            me = uid.orEmpty(),
+            onOpenPicker = { post -> startActivity(Intent(this, ReactionPickerActivity::class.java).putExtra("post_id", post.id)) },
             onComments = { post -> startActivity(Intent(this, CommentsActivity::class.java).putExtra("post_id", post.id)) },
             onAuthor = {}
         )
@@ -47,6 +48,7 @@ class ProfileActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         val userId = uid ?: return
+        postAdapter.resume()
         // Private details (birthday, gender, join date) live in users/{uid}; photo and cover in profiles/{uid}.
         listeners.value(FirebaseData.users.child(userId)) { snapshot ->
             val name = snapshot.child("name").getValue(String::class.java).orEmpty()
@@ -87,23 +89,14 @@ class ProfileActivity : AppCompatActivity() {
             }
         }
         listeners.value(FirebaseData.posts.orderByChild("authorId").equalTo(userId)) { snapshot ->
-            val posts = snapshot.children.map { item ->
-                FeedPost(
-                    id = item.key.orEmpty(),
-                    authorId = userId,
-                    authorName = item.child("authorName").getValue(String::class.java).orEmpty(),
-                    text = item.child("text").getValue(String::class.java).orEmpty(),
-                    createdAt = item.child("createdAt").getValue(Long::class.java) ?: 0L,
-                    reactionCount = 0,
-                    commentCount = 0
-                )
-            }.sortedByDescending { it.createdAt }
+            val posts = snapshot.children.map { FeedPost.from(it) }.sortedByDescending { it.createdAt }
             postAdapter.setPosts(posts)
             findViewById<TextView>(R.id.profilePostsEmpty).visibility = if (posts.isEmpty()) View.VISIBLE else View.GONE
         }
     }
 
     override fun onStop() {
+        postAdapter.pause()
         listeners.removeAll()
         super.onStop()
     }

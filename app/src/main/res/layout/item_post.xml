@@ -1,24 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- One post in the Home feed (04) and on Profile (15). The image grid shows 1, 2 or 3 tiles; with more than
+     3 images the third tile gets the "+N" overlay, as in the design. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginTop="6dp"
     android:background="@color/white"
-    android:orientation="vertical"
-    android:paddingHorizontal="12dp"
-    android:paddingTop="10dp">
+    android:orientation="vertical">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="52dp"
-        android:gravity="center_vertical">
+        android:layout_height="66dp"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="12dp">
 
         <TextView
             android:id="@+id/postAvatar"
             style="@style/Avatar"
-            android:layout_width="42dp"
-            android:layout_height="42dp"
-            android:textSize="12sp" />
+            android:layout_width="46dp"
+            android:layout_height="46dp"
+            android:textSize="13sp" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -30,16 +31,36 @@
             <TextView
                 android:id="@+id/postAuthorName"
                 style="@style/Heading"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="14sp" />
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textSize="15sp" />
 
             <TextView
                 android:id="@+id/postTime"
                 style="@style/Meta"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content" />
+
         </LinearLayout>
+
+        <ImageView
+            android:id="@+id/postMoreButton"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:contentDescription="More options"
+            android:padding="5dp"
+            android:src="@drawable/ic_more" />
+
+        <ImageView
+            android:id="@+id/postHideButton"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:contentDescription="Hide post"
+            android:padding="6dp"
+            android:src="@drawable/ic_close" />
+
     </LinearLayout>
 
     <TextView
@@ -47,36 +68,196 @@
         style="@style/Body"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="8dp"
-        android:paddingBottom="12dp" />
+        android:paddingHorizontal="12dp"
+        android:paddingBottom="10dp" />
 
-    <TextView
-        android:id="@+id/postCounts"
-        style="@style/Meta"
+    <LinearLayout
+        android:id="@+id/postImages"
         android:layout_width="match_parent"
-        android:layout_height="34dp"
-        android:gravity="center_vertical" />
+        android:layout_height="286dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/postImage1"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:contentDescription="Post photo"
+            android:scaleType="centerCrop" />
+
+        <LinearLayout
+            android:id="@+id/postImagesRight"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="2dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <ImageView
+                android:id="@+id/postImage2"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:contentDescription="Post photo"
+                android:scaleType="centerCrop" />
+
+            <RelativeLayout
+                android:id="@+id/postImage3Frame"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginTop="2dp"
+                android:layout_weight="1">
+
+                <ImageView
+                    android:id="@+id/postImage3"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="Post photo"
+                    android:scaleType="centerCrop" />
+
+                <TextView
+                    android:id="@+id/postImageMore"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@color/overlay_dark"
+                    android:gravity="center"
+                    android:textColor="@color/white"
+                    android:textSize="28sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+
+            </RelativeLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/postSummaryRow"
+        android:layout_width="match_parent"
+        android:layout_height="38dp"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="12dp">
+
+        <ImageView
+            android:id="@+id/postReaction1"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:contentDescription="Reaction"
+            android:visibility="gone" />
+
+        <ImageView
+            android:id="@+id/postReaction2"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_marginStart="-3dp"
+            android:contentDescription="Reaction"
+            android:visibility="gone" />
+
+        <ImageView
+            android:id="@+id/postReaction3"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_marginStart="-3dp"
+            android:contentDescription="Reaction"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/postReactionSummary"
+            style="@style/Meta"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="5dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/postCommentCount"
+            style="@style/Meta"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginHorizontal="12dp"
+        android:background="@color/divider" />
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="42dp">
+        android:layout_height="52dp">
 
-        <TextView
-            android:id="@+id/reactionButton"
-            style="@style/Body"
+        <LinearLayout
+            android:id="@+id/postLikeButton"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:gravity="center"
-            android:text="Like" />
+            android:gravity="center">
 
-        <TextView
-            android:id="@+id/commentsButton"
-            style="@style/Body"
+            <ImageView
+                android:id="@+id/postLikeIcon"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:contentDescription="Like"
+                android:src="@drawable/ic_thumb_up" />
+
+            <TextView
+                android:id="@+id/postLikeLabel"
+                style="@style/Body"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="7dp"
+                android:text="Like" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/postCommentButton"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:gravity="center"
-            android:text="Comment" />
+            android:gravity="center">
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:contentDescription="Comment"
+                android:src="@drawable/ic_comment" />
+
+            <TextView
+                style="@style/Body"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="7dp"
+                android:text="Comment" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/postShareButton"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center">
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:contentDescription="Share"
+                android:src="@drawable/ic_share" />
+
+            <TextView
+                style="@style/Body"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="7dp"
+                android:text="Share" />
+
+        </LinearLayout>
+
     </LinearLayout>
+
 </LinearLayout>

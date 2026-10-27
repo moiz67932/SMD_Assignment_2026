@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A person's stories on the Home row: latest story as the background, avatar with a seen/unseen ring, name. -->
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="94dp"
+    android:layout_height="142dp"
+    android:layout_marginEnd="8dp"
+    android:background="@drawable/rounded_dark">
+
+    <ImageView
+        android:id="@+id/storyTileImage"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="Story"
+        android:scaleType="centerCrop" />
+
+    <FrameLayout
+        android:id="@+id/storyTileRing"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:layout_margin="6dp"
+        android:background="@drawable/story_ring_unseen"
+        android:padding="3dp">
+
+        <TextView
+            android:id="@+id/storyTileAvatar"
+            style="@style/Avatar"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:textSize="9sp" />
+
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/storyTileName"
+        style="@style/Meta"
+        android:layout_width="match_parent"
+        android:layout_height="34dp"
+        android:layout_alignParentBottom="true"
+        android:background="#88000000"
+        android:ellipsize="end"
+        android:gravity="center_vertical"
+        android:maxLines="1"
+        android:paddingHorizontal="7dp"
+        android:textColor="@color/white"
+        android:textStyle="bold" />
+
+</RelativeLayout>

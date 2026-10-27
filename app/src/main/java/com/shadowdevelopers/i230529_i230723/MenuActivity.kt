@@ -36,6 +36,23 @@ class MenuActivity : AppCompatActivity() {
         Nav.tab(this, R.id.marketTab, MarketplaceActivity::class.java)
         Nav.tab(this, R.id.notificationsTab, NotificationsActivity::class.java)
 
+        // "See more" holds the story shortcuts; the other tiles are design-only in this version.
+        findViewById<View>(R.id.seeMoreButton).setOnClickListener { anchor ->
+            android.widget.PopupMenu(this, anchor).apply {
+                menu.add(0, 1, 0, "Your story")
+                menu.add(0, 2, 1, "Close friends")
+                setOnMenuItemClickListener { item ->
+                    startActivity(Intent(this@MenuActivity, if (item.itemId == 1) YourStoryActivity::class.java else CloseFriendsActivity::class.java))
+                    true
+                }
+            }.show()
+        }
+        listOf(R.id.memoriesShortcut, R.id.savedShortcut, R.id.groupsShortcut, R.id.eventsShortcut, R.id.helpRow, R.id.settingsRow, R.id.alsoFromRow).forEach { id ->
+            findViewById<View>(id).setOnClickListener {
+                android.widget.Toast.makeText(this, "Not part of this version", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+
         findViewById<View>(R.id.logoutButton).setOnClickListener {
             it.isEnabled = false
             Session.logout(this)

@@ -30,6 +30,7 @@
             android:textSize="20sp" />
 
         <LinearLayout
+            android:id="@+id/commentsSortButton"
             android:layout_width="116dp"
             android:layout_height="38dp"
             android:background="@drawable/rounded_soft"
@@ -37,6 +38,7 @@
             android:paddingHorizontal="10dp">
 
             <TextView
+                android:id="@+id/commentsSortLabel"
                 style="@style/Heading"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -66,21 +68,27 @@
         android:paddingHorizontal="16dp">
 
         <ImageView
+            android:id="@+id/commentsReaction1"
+            android:visibility="gone"
             android:layout_width="22dp"
             android:layout_height="22dp"
-            android:src="@drawable/reaction_like" />
+            android:contentDescription="Reaction" />
 
         <ImageView
+            android:id="@+id/commentsReaction2"
+            android:visibility="gone"
             android:layout_width="22dp"
             android:layout_height="22dp"
             android:layout_marginStart="-4dp"
-            android:src="@drawable/reaction_love" />
+            android:contentDescription="Reaction" />
 
         <ImageView
+            android:id="@+id/commentsReaction3"
+            android:visibility="gone"
             android:layout_width="22dp"
             android:layout_height="22dp"
             android:layout_marginStart="-4dp"
-            android:src="@drawable/reaction_laugh" />
+            android:contentDescription="Reaction" />
 
         <TextView
             style="@style/Heading"
@@ -88,7 +96,8 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:text="1.2K"
+            android:id="@+id/commentsReactionSummary"
+            android:text=""
             android:textSize="14sp" />
 
         <ImageView
@@ -487,13 +496,29 @@
 
     </ScrollView>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/commentsRecyclerView"
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:paddingBottom="6dp" />
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/commentsRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingBottom="6dp" />
+
+        <TextView
+            android:id="@+id/commentsEmpty"
+            style="@style/Meta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:gravity="center"
+            android:padding="24dp"
+            android:text="Loading comments…" />
+
+    </RelativeLayout>
 
     <View
         android:layout_width="match_parent"
@@ -502,16 +527,18 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="94dp"
+        android:layout_height="wrap_content"
         android:orientation="vertical"
         android:paddingHorizontal="14dp"
         android:paddingTop="7dp"
         android:paddingBottom="8dp">
 
         <LinearLayout
+            android:id="@+id/replyingBar"
             android:layout_width="match_parent"
             android:layout_height="24dp"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical"
+            android:visibility="gone">
 
             <TextView
                 android:id="@+id/replyingLabel"
@@ -519,18 +546,60 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Replying to Aisha Khan"
+                android:text=""
                 android:textSize="11sp" />
 
             <TextView
                 android:id="@+id/cancelReplyButton"
                 style="@style/Heading"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:paddingStart="12dp"
                 android:text="Cancel"
                 android:textSize="11sp" />
 
         </LinearLayout>
+
+        <RelativeLayout
+            android:id="@+id/commentAttachment"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_marginBottom="6dp"
+            android:layout_marginStart="47dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/commentAttachmentImage"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/rounded_soft"
+                android:contentDescription="Photo to send"
+                android:scaleType="centerCrop" />
+
+            <ImageView
+                android:id="@+id/commentAttachmentRemove"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_alignParentEnd="true"
+                android:layout_margin="3dp"
+                android:background="@drawable/circle_dark"
+                android:contentDescription="Remove photo"
+                android:padding="4dp"
+                android:src="@drawable/ic_close"
+                android:tint="@color/white" />
+
+            <TextView
+                android:id="@+id/commentUploadStatus"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/overlay_dark"
+                android:gravity="center"
+                android:textColor="@color/white"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+        </RelativeLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -538,9 +607,10 @@
             android:gravity="center_vertical">
 
             <ImageView
+                android:id="@+id/commentImageButton"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
-                android:contentDescription="Camera"
+                android:contentDescription="Add a photo"
                 android:padding="8dp"
                 android:src="@drawable/ic_camera"
                 android:tint="@color/primary" />
@@ -552,7 +622,9 @@
                 android:layout_marginHorizontal="7dp"
                 android:layout_weight="1"
                 android:background="@drawable/input_pill"
-                android:hint="Write a reply..."
+                android:hint="Write a comment..."
+                android:inputType="textCapSentences|textMultiLine"
+                android:maxLines="3"
                 android:paddingHorizontal="14dp"
                 android:textSize="13sp" />
 
