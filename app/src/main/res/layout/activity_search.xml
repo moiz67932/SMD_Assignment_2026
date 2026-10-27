@@ -49,6 +49,9 @@
                 android:textSize="13sp" />
 
             <ImageView
+                android:id="@+id/searchClearButton"
+                android:contentDescription="Clear search"
+                android:visibility="gone"
                 android:layout_width="26dp"
                 android:layout_height="26dp"
                 android:background="@drawable/circle_soft"
@@ -72,6 +75,7 @@
             android:gravity="center_vertical">
 
             <TextView
+                android:id="@+id/chipAll"
                 style="@style/Heading"
                 android:layout_width="52dp"
                 android:layout_height="32dp"
@@ -82,6 +86,7 @@
                 android:textSize="11sp" />
 
             <TextView
+                android:id="@+id/chipPeople"
                 style="@style/Heading"
                 android:layout_width="68dp"
                 android:layout_height="32dp"
@@ -92,6 +97,7 @@
                 android:textSize="11sp" />
 
             <TextView
+                android:id="@+id/chipPosts"
                 style="@style/Heading"
                 android:layout_width="62dp"
                 android:layout_height="32dp"
@@ -102,6 +108,7 @@
                 android:textSize="11sp" />
 
             <TextView
+                android:id="@+id/chipGroups"
                 style="@style/Heading"
                 android:layout_width="66dp"
                 android:layout_height="32dp"
@@ -112,6 +119,7 @@
                 android:textSize="11sp" />
 
             <TextView
+                android:id="@+id/chipMarketplace"
                 style="@style/Heading"
                 android:layout_width="94dp"
                 android:layout_height="32dp"
@@ -445,6 +453,32 @@
         </LinearLayout>
 
     </ScrollView>
+
+    <TextView
+        android:id="@+id/searchSectionTitle"
+        style="@style/Heading"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="14dp"
+        android:text="Recent searches"
+        android:textSize="16sp" />
+
+    <LinearLayout
+        android:id="@+id/recentSearchesList"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="14dp" />
+
+    <TextView
+        android:id="@+id/searchEmpty"
+        style="@style/Meta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="24dp"
+        android:visibility="gone" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/searchResults"

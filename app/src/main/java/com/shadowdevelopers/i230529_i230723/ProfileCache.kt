@@ -34,6 +34,9 @@ object ProfileCache {
         cache[profile.uid] = profile
     }
 
+    /** The cached name, or "" if this profile has not been loaded yet (used for local filtering). */
+    fun peekName(uid: String) = cache[uid]?.name.orEmpty()
+
     fun get(uid: String, onReady: (UserProfile) -> Unit) {
         cache[uid]?.let { onReady(it); return }
         val callbacks = waiting.getOrPut(uid) { mutableListOf() }

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Top of a conversation (21): big avatar, name and how you know each other. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:paddingVertical="18dp">
+
+    <TextView
+        android:id="@+id/chatIntroAvatar"
+        style="@style/Avatar"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:textSize="24sp" />
+
+    <TextView
+        android:id="@+id/chatIntroName"
+        style="@style/Title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textSize="20sp" />
+
+    <TextView
+        android:id="@+id/chatIntroSubtitle"
+        style="@style/Meta"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:gravity="center" />
+
+</LinearLayout>

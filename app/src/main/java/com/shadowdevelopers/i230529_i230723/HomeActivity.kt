@@ -69,6 +69,7 @@ class HomeActivity : AppCompatActivity() {
                 val target = if (post.authorId == me) ProfileActivity::class.java else OtherProfileActivity::class.java
                 startActivity(Intent(this, target).putExtra("person_uid", post.authorId))
             },
+            onShare = { post -> startActivity(Intent(this, SharePostActivity::class.java).putExtra("post_id", post.id)) },
             onHide = { post ->
                 hidden.add(post.id)
                 showFeed()

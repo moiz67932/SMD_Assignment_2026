@@ -1,70 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- One conversation in Chats (20): avatar (+ green dot when online), name, "preview · 2m" (bold when unread), unread dot. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="78dp"
+    android:layout_height="68dp"
     android:gravity="center_vertical"
-    android:orientation="horizontal"
     android:paddingHorizontal="14dp">
 
     <RelativeLayout
-        android:layout_width="50dp"
-        android:layout_height="50dp">
+        android:layout_width="52dp"
+        android:layout_height="52dp">
+
         <TextView
             android:id="@+id/chatListAvatar"
             style="@style/Avatar"
-            android:layout_width="46dp"
-            android:layout_height="46dp"
-            android:textSize="12sp" />
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:textSize="14sp" />
+
         <View
             android:id="@+id/chatOnlineDot"
-            android:layout_width="12dp"
-            android:layout_height="12dp"
+            android:layout_width="15dp"
+            android:layout_height="15dp"
             android:layout_alignParentEnd="true"
             android:layout_alignParentBottom="true"
-            android:background="@drawable/circle_green" />
+            android:background="@drawable/avatar_outline"
+            android:visibility="gone" />
+
     </RelativeLayout>
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="10dp"
+        android:layout_marginStart="11dp"
         android:layout_weight="1"
         android:orientation="vertical">
+
         <TextView
             android:id="@+id/chatListName"
             style="@style/Heading"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
             android:textSize="14sp" />
+
         <TextView
             android:id="@+id/chatLastMessage"
             style="@style/Meta"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp" />
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textSize="12sp" />
+
     </LinearLayout>
 
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="match_parent"
-        android:gravity="center_vertical"
-        android:orientation="vertical">
-        <TextView
-            android:id="@+id/chatLastTime"
-            style="@style/Meta"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
-        <TextView
-            android:id="@+id/chatUnreadCount"
-            style="@style/Meta"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
-            android:layout_gravity="end"
-            android:layout_marginTop="5dp"
-            android:background="@drawable/circle_teal"
-            android:gravity="center"
-            android:textColor="@color/white"
-            android:textSize="10sp"
-            android:visibility="gone" />
-    </LinearLayout>
+    <View
+        android:id="@+id/chatUnreadDot"
+        android:layout_width="10dp"
+        android:layout_height="10dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/circle_teal"
+        android:visibility="gone" />
+
 </LinearLayout>

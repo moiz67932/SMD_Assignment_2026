@@ -30,16 +30,21 @@ class KinnectApplication : Application(), Application.ActivityLifecycleCallbacks
     override fun onActivityStarted(activity: Activity) {
         Insets.apply(activity)
         startedActivities++
+        inForeground = true
         ExternalLaunch.clear()
         handler.removeCallbacks(markOffline)
-        if (FirebaseAuth.getInstance().currentUser != null) connectPresence()
+        if (FirebaseAuth.getInstance().currentUser != null) {
+            connectPresence()
+            CallManager.startListening(this) // incoming calls ring anywhere in the app while signed in
+        }
     }
 
     override fun onActivityStopped(activity: Activity) {
         startedActivities--
         if (startedActivities <= 0) {
             startedActivities = 0
-            handler.postDelayed(markOffline, 1200)
+            inForeground = false
+            handler.postDelayed(markOffline, OFFLINE_GRACE_MS)
         }
     }
 
@@ -88,6 +93,26 @@ class KinnectApplication : Application(), Application.ActivityLifecycleCallbacks
     /** Stops every listener that belongs to the signed-in user (called on logout). */
     fun stopUserListeners() {
         handler.removeCallbacks(markOffline)
+        CallManager.stopListening()
+    }
+
+    companion object {
+        /** True while any Kinnect screen is visible (an incoming call can then open its screen directly). */
+        @Volatile var inForeground = false
+
+        /** How long the app may be in the background before the user is shown as offline. */
+        private const val OFFLINE_GRACE_MS = 5_000L
+
+        /** "Active now", "Active 5m ago", "Active yesterday", "Active 12 Oct" (or "Offline" if never seen). */
+        fun presenceLabel(online: Boolean, lastSeen: Long): String = when {
+            online -> "Active now"
+            lastSeen <= 0L -> "Offline"
+            else -> when (val ago = TimeFormat.ago(lastSeen)) {
+                "now" -> "Active just now"
+                "Yesterday" -> "Active yesterday"
+                else -> if (ago.matches(Regex("\\d+[mh]"))) "Active $ago ago" else "Active $ago" // "5m" -> "Active 5m ago", "12 Oct" -> "Active 12 Oct"
+            }
+        }
     }
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Insets.prepare(activity)

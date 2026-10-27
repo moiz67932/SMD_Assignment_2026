@@ -38,21 +38,37 @@ object FirebaseNotifications {
             .addOnFailureListener { onDone() }
     }
 
-    fun show(context: Context, title: String, body: String, chatId: String?, senderId: String?) {
-        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+    const val CHANNEL_MESSAGES = "kinnect_messages"
+    const val CHANNEL_CALLS = "kinnect_calls"
+
+    /** Notification channels: "Messages" (high importance) and "Calls" (high importance, used by incoming calls). */
+    fun createChannels(context: Context) {
+        if (Build.VERSION.SDK_INT < 26) return
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= 26) {
-            manager.createNotificationChannel(NotificationChannel("kinnect_messages", "Kinnect messages", NotificationManager.IMPORTANCE_HIGH))
-        }
+        manager.createNotificationChannel(NotificationChannel(CHANNEL_MESSAGES, "Messages", NotificationManager.IMPORTANCE_HIGH))
+        manager.createNotificationChannel(NotificationChannel(CHANNEL_CALLS, "Calls", NotificationManager.IMPORTANCE_HIGH))
+    }
+
+    fun canNotify(context: Context) =
+        Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+    /** A message/screenshot notification; tapping it opens the chat with that person. */
+    fun show(context: Context, title: String, body: String, chatId: String?, senderId: String?) {
+        if (!canNotify(context)) return
+        createChannels(context)
         val intent = Intent(context, ChatActivity::class.java)
-        if (!chatId.isNullOrBlank()) intent.putExtra("chat_id", chatId)
         if (!senderId.isNullOrBlank()) intent.putExtra("person_uid", senderId)
-        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        intent.putExtra("person_name", title)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         val pending = PendingIntent.getActivity(context, (chatId ?: senderId ?: "chat").hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val notification = NotificationCompat.Builder(context, "kinnect_messages")
+        val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
             .setSmallIcon(R.drawable.ic_chat)
+            .setColor(ContextCompat.getColor(context, R.color.primary))
             .setContentTitle(title.ifBlank { "Kinnect" })
             .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
             .setContentIntent(pending)
             .build()
@@ -60,16 +76,27 @@ object FirebaseNotifications {
     }
 }
 
+/**
+ * Receives the data-only pushes sent by fcm-server. Builds the notification itself so it can stay quiet
+ * when the user is already looking at that conversation.
+ */
 class KinnectMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         FirebaseNotifications.saveToken()
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
-        val title = message.notification?.title ?: message.data["title"].orEmpty()
-        val body = message.notification?.body ?: message.data["body"].orEmpty()
-        if (body.isNotBlank()) {
-            FirebaseNotifications.show(this, title, body, message.data["chatId"], message.data["senderId"])
+        val data = message.data
+        val title = data["title"] ?: message.notification?.title.orEmpty()
+        val body = data["body"] ?: message.notification?.body.orEmpty()
+        val from = data["fromUid"]
+        when (data["type"]) {
+            // Incoming call while Kinnect is closed or in the background: full-screen ringing notification.
+            "call" -> CallNotifier.ring(this, data["callId"].orEmpty(), from.orEmpty(), title, data["video"] == "true")
+            else -> {
+                if (from != null && from == ChatActivity.openChatWith) return // that chat is open on screen right now
+                if (body.isNotBlank()) FirebaseNotifications.show(this, title, body, data["chatId"], from)
+            }
         }
     }
 }

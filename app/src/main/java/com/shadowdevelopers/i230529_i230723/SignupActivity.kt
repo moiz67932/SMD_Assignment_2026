@@ -96,7 +96,12 @@ class SignupActivity : AppCompatActivity() {
                     FirebaseData.users.child(user.uid).setValue(profile)
                         .addOnSuccessListener {
                             FirebaseData.profiles.child(user.uid).setValue(
-                                mapOf("uid" to user.uid, "name" to "$first $last", "nameLower" to "$first $last".lowercase(), "username" to "", "usernameLower" to "", "bio" to "", "profileSetupComplete" to false)
+                                mapOf(
+                                    "uid" to user.uid, "name" to "$first $last", "nameLower" to "$first $last".lowercase(),
+                                    // Search also matches on first and last name separately.
+                                    "firstNameLower" to first.lowercase(), "lastNameLower" to last.lowercase(),
+                                    "username" to "", "usernameLower" to "", "bio" to "", "profileSetupComplete" to false
+                                )
                             ).addOnSuccessListener {
                                 Session.saveRecent(this, emailAddress, "$first $last", null)
                                 Session.setProfileComplete(this, user.uid, false)

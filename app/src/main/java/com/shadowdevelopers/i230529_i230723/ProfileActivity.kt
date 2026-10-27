@@ -36,7 +36,8 @@ class ProfileActivity : AppCompatActivity() {
             me = uid.orEmpty(),
             onOpenPicker = { post -> startActivity(Intent(this, ReactionPickerActivity::class.java).putExtra("post_id", post.id)) },
             onComments = { post -> startActivity(Intent(this, CommentsActivity::class.java).putExtra("post_id", post.id)) },
-            onAuthor = {}
+            onAuthor = {},
+            onShare = { post -> startActivity(Intent(this, SharePostActivity::class.java).putExtra("post_id", post.id)) }
         )
         findViewById<RecyclerView>(R.id.profilePostsRecyclerView).apply {
             layoutManager = LinearLayoutManager(this@ProfileActivity)

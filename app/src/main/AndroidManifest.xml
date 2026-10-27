@@ -48,8 +48,17 @@
         </provider>
         <activity android:name=".MediaViewerActivity" android:exported="false" />
         <activity android:name=".CloseFriendsActivity" android:exported="false" />
+        <activity android:name=".SharePostActivity" android:exported="false" />
         <activity android:name=".MarketplaceActivity" android:exported="false" />
-        <activity android:name=".VoiceCallActivity" android:exported="false" />
+        <activity android:name=".VoiceCallActivity" android:exported="false" android:launchMode="singleTop" />
+        <!-- Ringing screen: shown over the lock screen, opened by the call listener or a full-screen notification. -->
+        <activity
+            android:name=".IncomingCallActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true" />
         <activity android:name=".ChatActivity" android:exported="false" />
         <activity android:name=".ChatsActivity" android:exported="false" />
         <activity android:name=".MenuActivity" android:exported="false" />

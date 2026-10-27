@@ -29,6 +29,7 @@
             android:text="Chats" />
 
         <ImageView
+            android:id="@+id/chatsNewButton"
             android:layout_width="38dp"
             android:layout_height="38dp"
             android:background="@drawable/circle_soft"
@@ -52,145 +53,59 @@
             android:src="@drawable/ic_search"
             android:tint="@color/text_secondary" />
 
-        <TextView
+        <EditText
+            android:id="@+id/chatsSearchInput"
             style="@style/Body"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_marginStart="8dp"
+            android:background="@null"
             android:gravity="center_vertical"
-            android:text="Search"
-            android:textColor="@color/text_secondary" />
+            android:hint="Search"
+            android:inputType="textPersonName"
+            android:singleLine="true"
+            android:textColorHint="@color/text_secondary" />
 
     </LinearLayout>
 
-    <HorizontalScrollView
+    <!-- "Your note" then friends who are online right now (green dot); tap one to open the chat. -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="104dp"
-        android:scrollbars="none">
+        android:gravity="center_vertical"
+        android:paddingStart="10dp">
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:id="@+id/chatsYourNote"
+            android:layout_width="64dp"
             android:layout_height="match_parent"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="10dp">
+            android:gravity="center"
+            android:orientation="vertical">
 
-            <LinearLayout
-                android:layout_width="64dp"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:orientation="vertical">
+            <ImageView
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:background="@drawable/circle_soft"
+                android:contentDescription="Your note"
+                android:padding="12dp"
+                android:src="@drawable/ic_add" />
 
-                <ImageView
-                    android:layout_width="52dp"
-                    android:layout_height="52dp"
-                    android:background="@drawable/circle_soft"
-                    android:padding="12dp"
-                    android:src="@drawable/ic_add" />
-
-                <TextView
-                    style="@style/Meta"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Your note" />
-
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="64dp"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:orientation="vertical">
-
-                <TextView
-                    style="@style/Avatar"
-                    android:layout_width="52dp"
-                    android:layout_height="52dp"
-                    android:background="@drawable/circle_red"
-                    android:text="AK"
-                    android:textSize="14sp" />
-
-                <TextView
-                    style="@style/Meta"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Aisha" />
-
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="58dp"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:orientation="vertical">
-
-                <TextView
-                    style="@style/Avatar"
-                    android:layout_width="46dp"
-                    android:layout_height="46dp"
-                    android:background="@drawable/circle_green"
-                    android:text="OF"
-                    android:textSize="12sp" />
-
-                <TextView
-                    style="@style/Meta"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Omar" />
-
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="58dp"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:orientation="vertical">
-
-                <TextView
-                    style="@style/Avatar"
-                    android:layout_width="46dp"
-                    android:layout_height="46dp"
-                    android:background="@drawable/circle_purple"
-                    android:text="SI"
-                    android:textSize="12sp" />
-
-                <TextView
-                    style="@style/Meta"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Sara" />
-
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="58dp"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:orientation="vertical">
-
-                <TextView
-                    style="@style/Avatar"
-                    android:layout_width="46dp"
-                    android:layout_height="46dp"
-                    android:background="@drawable/circle_green"
-                    android:text="HA"
-                    android:textSize="12sp" />
-
-                <TextView
-                    style="@style/Meta"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Hamza" />
-
-            </LinearLayout>
+            <TextView
+                style="@style/Meta"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Your note" />
 
         </LinearLayout>
 
-    </HorizontalScrollView>
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/chatsActiveRecyclerView"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1" />
+
+    </LinearLayout>
 
     <ScrollView
         android:id="@+id/sampleChatsScroll"
@@ -456,6 +371,15 @@
 
     </ScrollView>
 
+    <TextView
+        android:id="@+id/chatsEmpty"
+        style="@style/Meta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="24dp"
+        android:text="Loading chats…" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/chatsRecyclerView"
         android:layout_width="match_parent"
@@ -496,6 +420,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/chatsTabPeople"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
@@ -517,6 +442,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/chatsTabStories"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"

@@ -1,53 +1,195 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- One chat message (21). The adapter decides alignment, grouping (avatar only on the last bubble of a run),
+     the date separator, the reply quote, the heart badge and the small "seen" avatar. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/messageRow"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:gravity="start"
     android:orientation="vertical"
-    android:paddingVertical="3dp">
+    android:paddingVertical="1dp">
 
     <TextView
-        android:id="@+id/messageReplyText"
+        android:id="@+id/messageDate"
         style="@style/Meta"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:gravity="center"
+        android:textAllCaps="true"
+        android:textStyle="bold"
         android:visibility="gone" />
 
     <TextView
-        android:id="@+id/messageText"
-        style="@style/Body"
-        android:layout_width="wrap_content"
+        android:id="@+id/messageSystem"
+        style="@style/Meta"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/rounded_soft"
-        android:maxWidth="280dp"
-        android:padding="11dp" />
+        android:gravity="center"
+        android:paddingVertical="6dp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/messageReplyHeader"
+        style="@style/Meta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:paddingHorizontal="38dp"
+        android:visibility="gone" />
 
     <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="28dp"
-        android:gravity="center_vertical">
+        android:id="@+id/messageBubbleRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="bottom">
 
         <TextView
-            android:id="@+id/messageEdited"
-            style="@style/Meta"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:visibility="gone" />
+            android:id="@+id/messageAvatar"
+            style="@style/Avatar"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginEnd="6dp"
+            android:textSize="8sp"
+            android:visibility="invisible" />
 
-        <TextView
-            android:id="@+id/messageTime"
-            style="@style/Meta"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:id="@+id/messageColumn"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="5dp" />
+            android:layout_weight="1"
+            android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/messageHeart"
-            style="@style/Meta"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="♡" />
+            <TextView
+                android:id="@+id/messageReplyText"
+                style="@style/Meta"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="-6dp"
+                android:alpha="0.8"
+                android:background="@drawable/rounded_soft"
+                android:maxWidth="240dp"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:paddingHorizontal="12dp"
+                android:paddingTop="7dp"
+                android:paddingBottom="13dp"
+                android:textColor="@color/text_secondary"
+                android:visibility="gone" />
+
+            <RelativeLayout
+                android:id="@+id/messageBubbleFrame"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingBottom="2dp">
+
+                <LinearLayout
+                    android:id="@+id/messageBubble"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/messageText"
+                        style="@style/Body"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/rounded_soft"
+                        android:maxWidth="270dp"
+                        android:paddingHorizontal="14dp"
+                        android:paddingVertical="9dp"
+                        android:textSize="14sp" />
+
+                    <!-- A shared post: small card with the first photo, author and the start of the text. -->
+                    <LinearLayout
+                        android:id="@+id/messagePostCard"
+                        android:layout_width="240dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:background="@drawable/rounded_soft"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <ImageView
+                            android:id="@+id/messagePostImage"
+                            android:layout_width="match_parent"
+                            android:layout_height="130dp"
+                            android:contentDescription="Post photo"
+                            android:scaleType="centerCrop"
+                            android:visibility="gone" />
+
+                        <TextView
+                            android:id="@+id/messagePostAuthor"
+                            style="@style/Heading"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingHorizontal="11dp"
+                            android:paddingTop="8dp"
+                            android:textSize="13sp" />
+
+                        <TextView
+                            android:id="@+id/messagePostSnippet"
+                            style="@style/Meta"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:maxLines="3"
+                            android:paddingHorizontal="11dp"
+                            android:paddingBottom="9dp"
+                            android:paddingTop="2dp" />
+
+                    </LinearLayout>
+
+                    <ImageView
+                        android:id="@+id/messageImage"
+                        android:layout_width="220dp"
+                        android:layout_height="170dp"
+                        android:layout_marginTop="2dp"
+                        android:background="@drawable/rounded_soft"
+                        android:contentDescription="Photo"
+                        android:scaleType="centerCrop"
+                        android:visibility="gone" />
+
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/messageHeart"
+                    android:layout_width="wrap_content"
+                    android:layout_height="22dp"
+                    android:layout_below="@id/messageBubble"
+                    android:layout_marginTop="-10dp"
+                    android:background="@drawable/heart_badge"
+                    android:elevation="2dp"
+                    android:gravity="center"
+                    android:minWidth="22dp"
+                    android:paddingHorizontal="4dp"
+                    android:text="♥"
+                    android:textColor="@color/reaction_pink"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
+            </RelativeLayout>
+
+            <TextView
+                android:id="@+id/messageStatus"
+                style="@style/Meta"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="6dp"
+                android:textSize="10sp"
+                android:visibility="gone" />
+
+        </LinearLayout>
+
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/messageSeen"
+        style="@style/Avatar"
+        android:layout_width="14dp"
+        android:layout_height="14dp"
+        android:layout_gravity="end"
+        android:layout_marginTop="2dp"
+        android:layout_marginEnd="2dp"
+        android:textSize="5sp"
+        android:visibility="gone" />
+
 </LinearLayout>

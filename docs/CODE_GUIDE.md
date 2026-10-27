@@ -29,3 +29,13 @@ decides what to show (me + friends) on the client. Making posts friends-only wou
 | `closeFriends/{uid}/{friendUid} = true` | now used: chosen on the Close friends screen | owner reads/writes |
 | `storyReactions/{owner}/{storyId}/{viewer}` | new: Like / Love / Laugh sent from the Story viewer (hearts on Your story) | viewer writes own entry; owner reads and may delete a whole story's reactions |
 | `chats/{chatId}/lastMessage` | added `messageId` (so an edit/delete can tell whether it touched the last message) | members only (unchanged) |
+| `chats/{chatId}/messages/{id}` | message `type` can be `text`, `image` (`imageRef`), `post` (`sharedPostId`, `sharedAuthorName`, `sharedSnippet`, `sharedImage`) or `system` | members only; sender creates; edit/delete by sender within 5 minutes (unchanged) |
+| `chats/{chatId}/lastRead/{uid} = time` | new: when each member last had the chat open (drives the small "seen" avatar) | member writes own value; members read |
+| `chats/{chatId}/typing/{uid} = true` | now used: set while typing, removed after 4 s idle / on stop / on disconnect | member writes own value; members read (unchanged) |
+| `messageReactions/{chatId}` | read permission moved from each message to the whole chat (one listener for all hearts) | members read; each user writes only their own heart |
+| messages | added `replyToSenderId` ("You replied to Aisha") | unchanged |
+| `profiles/{uid}` | Sign up now also writes `firstNameLower` / `lastNameLower`; all four search fields are indexed (`.indexOn`) | owner writes, signed-in users read (unchanged) |
+| `pushQueue/{pushId}` | new: `toUid`, `fromUid`, `type` (message / screenshot / call), `title`, `body`, `chatId`, optional `callId` / `video`, `createdAt`. Written by the app, read and deleted by `fcm-server` (Admin SDK) | signed-in users may only **create** items with their own `fromUid`; nobody can read through the client SDK |
+| `callRequests/{callee}/{callId}` | `status` now one of ringing / accepted / declined / missed / cancelled / ended (validated); the Agora channel is the `callId` | caller creates; caller or callee update; callee reads all own requests; caller reads own call |
+| `callLogs/{callId}` | `status`, `durationSeconds`, `endedAt` updated when a call finishes | caller or callee (unchanged) |
+| messages | new `type: "call"` with `callId` ("Voice call · 2:31", "Missed video call"), written once by the caller | sender = caller (unchanged rules) |
