@@ -26,6 +26,7 @@ data class FriendRow(val uid: String, val kind: FriendRowKind, val relation: Rel
  * (friends of friends, most mutual friends first). "Your friends" shows the real friends list.
  */
 class FriendsActivity : AppCompatActivity() {
+    private val badges by lazy { TabBadges(this) }
     private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
     private val listeners = ListenerBag()
     private lateinit var state: FriendState
@@ -71,10 +72,12 @@ class FriendsActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        badges.start()
         if (me.isNotBlank()) state.attach(listeners)
     }
 
     override fun onStop() {
+        badges.stop()
         listeners.removeAll()
         super.onStop()
     }

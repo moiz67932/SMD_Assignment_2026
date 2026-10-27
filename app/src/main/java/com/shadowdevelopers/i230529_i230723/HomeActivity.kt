@@ -24,6 +24,7 @@ import com.google.firebase.database.ValueEventListener
  * for me + up to 40 friends, merges the results and sorts them by createdAt.
  */
 class HomeActivity : AppCompatActivity() {
+    private val badges by lazy { TabBadges(this) }
     private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
     private val listeners = ListenerBag()
     /** One live query per author currently in the feed. */
@@ -53,7 +54,6 @@ class HomeActivity : AppCompatActivity() {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 301)
         }
 
-        findViewById<View>(R.id.samplePostCard).visibility = View.GONE
         ProfileCache.get(me) { profile ->
             AvatarBinder.bind(findViewById(R.id.profileButton), profile.name, profile.photo)
             findViewById<TextView>(R.id.createPostButton).text = "What’s on your mind, ${profile.name.substringBefore(" ")}?"
@@ -93,8 +93,6 @@ class HomeActivity : AppCompatActivity() {
         findViewById<View>(R.id.photoShortcutButton).setOnClickListener {
             startActivity(Intent(this, CreatePostActivity::class.java).putExtra("open_picker", true))
         }
-        open(R.id.commentsButton, CommentsActivity::class.java)
-        open(R.id.reactionButton, ReactionPickerActivity::class.java)
         open(R.id.profileButton, ProfileActivity::class.java)
         Nav.tab(this, R.id.friendsTab, FriendsActivity::class.java)
         Nav.tab(this, R.id.marketTab, MarketplaceActivity::class.java)
@@ -104,6 +102,7 @@ class HomeActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        badges.start()
         if (me.isBlank()) return
         feedAdapter.resume()
         Stories.removeExpired(me)
@@ -115,6 +114,7 @@ class HomeActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
+        badges.stop()
         feedAdapter.pause()
         listeners.removeAll()
         authorQueries.values.forEach { (query, listener) -> query.removeEventListener(listener) }

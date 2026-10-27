@@ -28,3 +28,6 @@ fcm-server/serviceAccountKey*.json
 
 # IDE
 .idea/
+
+# Kotlin compiler cache (created by Kotlin 2.x at the project root)
+.kotlin/

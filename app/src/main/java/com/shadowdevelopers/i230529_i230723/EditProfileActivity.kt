@@ -129,8 +129,9 @@ class EditProfileActivity : AppCompatActivity() {
         val name = nameInput.text.toString().trim()
         val username = usernameInput.text.toString().trim().removePrefix("@").lowercase()
         val bio = bioInput.text.toString().trim()
-        if (name.isBlank() || username.length < 3 || !username.matches(Regex("[a-z0-9_.]+")) || bio.isBlank()) {
-            Toast.makeText(this, "Enter a name, a username (3+ letters, digits, _ or .) and a bio", Toast.LENGTH_LONG).show()
+        // Same limits as database.rules.json: name 1-60, username 3-30 of a-z 0-9 _ ., bio 1-150.
+        if (name.isBlank() || name.length > 60 || username.length !in 3..30 || !username.matches(Regex("[a-z0-9_.]+")) || bio.isBlank() || bio.length > 150) {
+            Toast.makeText(this, "Enter a name, a username (3-30 letters, digits, _ or .) and a bio", Toast.LENGTH_LONG).show()
             return
         }
         saveButton.isEnabled = false

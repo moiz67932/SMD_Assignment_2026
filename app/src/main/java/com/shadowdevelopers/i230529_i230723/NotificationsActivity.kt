@@ -13,6 +13,7 @@ import com.google.firebase.database.ValueEventListener
 
 /** Notifications (18): New (unread) and Earlier (read), newest first, 30 at a time. */
 class NotificationsActivity : AppCompatActivity() {
+    private val badges by lazy { TabBadges(this) }
     private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
     private val listeners = ListenerBag()
     private lateinit var state: FriendState
@@ -66,12 +67,14 @@ class NotificationsActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        badges.start()
         if (me.isBlank()) return
         state.attach(listeners)
         listenNotifications()
     }
 
     override fun onStop() {
+        badges.stop()
         listeners.removeAll()
         notificationsListener = null
         notificationsQuery = null

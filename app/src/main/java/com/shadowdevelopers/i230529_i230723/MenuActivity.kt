@@ -8,6 +8,7 @@ import com.google.firebase.auth.FirebaseAuth
 import android.widget.TextView
 
 class MenuActivity : AppCompatActivity() {
+    private val badges by lazy { TabBadges(this) }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_menu)
@@ -57,5 +58,15 @@ class MenuActivity : AppCompatActivity() {
             it.isEnabled = false
             Session.logout(this)
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        badges.start()
+    }
+
+    override fun onStop() {
+        badges.stop()
+        super.onStop()
     }
 }

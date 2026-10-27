@@ -22,6 +22,7 @@ import com.google.firebase.database.ValueEventListener
 data class MarketItem(val id: String, val title: String, val price: String, val seller: String, val createdAt: Long)
 
 class MarketplaceActivity : AppCompatActivity() {
+    private val badges by lazy { TabBadges(this) }
     private var itemsQuery: Query? = null
     private var itemsListener: ValueEventListener? = null
     private lateinit var adapter: MarketItemAdapter
@@ -55,6 +56,7 @@ class MarketplaceActivity : AppCompatActivity() {
                     )
                 }.sortedByDescending { it.createdAt }
                 adapter.setItems(items)
+                findViewById<TextView>(R.id.marketplaceCount).text = if (items.size == 1) "1 item" else "${items.size} items"
             }
             override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
                 Toast.makeText(this@MarketplaceActivity, error.message, Toast.LENGTH_LONG).show()
@@ -97,6 +99,16 @@ class MarketplaceActivity : AppCompatActivity() {
 
     private fun open(viewId: Int, target: Class<*>) {
         findViewById<View>(viewId).setOnClickListener { startActivity(Intent(this, target)) }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        badges.start()
+    }
+
+    override fun onStop() {
+        badges.stop()
+        super.onStop()
     }
 
     override fun onDestroy() {
