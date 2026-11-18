@@ -34,3 +34,7 @@ backend/var/
 
 # Kotlin compiler cache (created by Kotlin 2.x at the project root)
 .kotlin/
+
+# Python test cache
+__pycache__/
+*.py[cod]
