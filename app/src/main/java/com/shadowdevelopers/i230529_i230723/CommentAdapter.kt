@@ -26,7 +26,9 @@ data class PostComment(
     val parentCommentId: String,
     val parentName: String,
     val likeCount: Int = 0,
-    val liked: Boolean = false
+    val liked: Boolean = false,
+    /** Still queued offline (not on the server yet). */
+    val pending: Boolean = false
 )
 
 /** A row in the list: either a comment (indented when it is a reply) or "View N more replies". */
@@ -111,7 +113,7 @@ class CommentAdapter(
                     context.startActivity(Intent(context, MediaViewerActivity::class.java).putStringArrayListExtra("media_refs", arrayListOf(comment.imageRef)))
                 }
             }
-            time.text = TimeFormat.ago(comment.createdAt)
+            time.text = TimeFormat.ago(comment.createdAt) + if (comment.pending) " · Pending" else ""
             like.setTextColor(ContextCompat.getColor(context, if (comment.liked) R.color.primary else R.color.text_secondary))
             like.text = if (comment.liked) "Liked" else "Like"
             badge.visibility = if (comment.likeCount > 0) View.VISIBLE else View.GONE

@@ -15,7 +15,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.google.firebase.database.DataSnapshot
 
 /**
  * Comments (06) for one post: top-level comments with their replies nested underneath (two shown,
@@ -24,10 +23,7 @@ import com.google.firebase.database.DataSnapshot
 class CommentsActivity : AppCompatActivity() {
     private val me by lazy { Backend.uid.orEmpty() }
     private val listeners = ListenerBag()
-    private val headerListeners = ListenerBag()
-    private val likeQueries = mutableMapOf<String, Pair<com.google.firebase.database.Query, com.google.firebase.database.ValueEventListener>>()
     private val comments = mutableListOf<PostComment>()
-    private val likes = mutableMapOf<String, Pair<Int, Boolean>>()
     private val expanded = mutableSetOf<String>()
     private var newestFirst = false
     private var loaded = false
@@ -50,7 +46,6 @@ class CommentsActivity : AppCompatActivity() {
             finish()
             return
         }
-        FirebaseData.posts.child(postId).child("authorId").get().addOnSuccessListener { postAuthorId = it.getValue(String::class.java).orEmpty() }
 
         adapter = CommentAdapter(
             me = me,
@@ -79,71 +74,68 @@ class CommentsActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         if (postId.isBlank() || me.isBlank()) return
-        // Header: live reaction summary of the post; tapping it opens the picker.
-        headerListeners.value(FirebaseData.postReactions.child(postId)) { snapshot ->
-            val summary = Reactions.summarize(snapshot, me)
-            val label = findViewById<TextView>(R.id.commentsReactionSummary)
-            Reactions.bindSummary(listOf(findViewById(R.id.commentsReaction1), findViewById(R.id.commentsReaction2), findViewById(R.id.commentsReaction3)), label, summary)
-            if (summary.total == 0) label.text = "Be the first to react"
-            (label.parent as View).setOnClickListener {
-                startActivity(Intent(this, ReactionPickerActivity::class.java).putExtra("post_id", postId))
-            }
-        }
-        listeners.value(FirebaseData.comments.child(postId).orderByChild("createdAt"), onError = {
-            findViewById<TextView>(R.id.commentsEmpty).apply { visibility = View.VISIBLE; text = Forms.message(it) }
-        }) { snapshot ->
-            comments.clear()
-            snapshot.children.mapNotNullTo(comments) { parse(it) }
-            loaded = true
-            syncLikeListeners()
-            render()
-        }
+        // Header (reaction summary) and comments: SQLite first, then the server every 6 s and after offline actions sync.
+        load(fromServer = false)
+        listeners.poll(6_000) { load(fromServer = true) }
     }
 
     override fun onStop() {
-        headerListeners.removeAll()
         listeners.removeAll()
-        likeQueries.values.forEach { (query, listener) -> query.removeEventListener(listener) }
-        likeQueries.clear()
         super.onStop()
     }
 
-    private fun parse(item: DataSnapshot): PostComment? {
-        val authorId = item.child("authorId").getValue(String::class.java) ?: return null
-        return PostComment(
-            id = item.key.orEmpty(),
-            authorId = authorId,
-            authorName = item.child("authorName").getValue(String::class.java) ?: "Kinnect member",
-            text = item.child("text").getValue(String::class.java).orEmpty(),
-            imageRef = item.child("imageRef").getValue(String::class.java).orEmpty(),
-            createdAt = item.child("createdAt").getValue(Long::class.java) ?: 0L,
-            parentCommentId = item.child("parentCommentId").getValue(String::class.java).orEmpty(),
-            parentName = item.child("parentName").getValue(String::class.java).orEmpty()
-        )
+    private fun load(fromServer: Boolean) {
+        Backend.call({ PostRepo.post(postId, fromServer) to PostRepo.comments(postId, fromServer) }) { result ->
+            result.onSuccess { (post, list) ->
+                if (post != null) showHeader(post)
+                comments.clear()
+                comments.addAll(toThreads(list))
+                loaded = true
+                render()
+            }.onFailure {
+                if (!fromServer) return@onFailure
+                loaded = true
+                if (comments.isEmpty()) findViewById<TextView>(R.id.commentsEmpty).apply { visibility = View.VISIBLE; text = Forms.message(it as? Exception, "Could not load comments") }
+            }
+        }
     }
 
-    /** One like listener per comment: commentLikes/{commentId}/{uid} = true. */
-    private fun syncLikeListeners() {
-        val ids = comments.map { it.id }.toSet()
-        likeQueries.keys.filter { it !in ids }.forEach { id -> likeQueries.remove(id)?.let { (q, l) -> q.removeEventListener(l) } }
-        ids.filter { it !in likeQueries }.forEach { id ->
-            val query = FirebaseData.commentLikes.child(id)
-            val listener = object : com.google.firebase.database.ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    likes[id] = snapshot.childrenCount.toInt() to (snapshot.child(me).getValue(Boolean::class.java) == true)
-                    render()
-                }
+    private fun showHeader(post: FeedPost) {
+        postAuthorId = post.authorId
+        val summary = Reactions.summarize(post, me)
+        val label = findViewById<TextView>(R.id.commentsReactionSummary)
+        Reactions.bindSummary(listOf(findViewById(R.id.commentsReaction1), findViewById(R.id.commentsReaction2), findViewById(R.id.commentsReaction3)), label, summary)
+        if (summary.total == 0) label.text = "Be the first to react"
+        (label.parent as View).setOnClickListener {
+            startActivity(Intent(this, ReactionPickerActivity::class.java).putExtra("post_id", postId))
+        }
+    }
 
-                override fun onCancelled(error: com.google.firebase.database.DatabaseError) = Unit
-            }
-            query.addValueEventListener(listener)
-            likeQueries[id] = query to listener
+    /**
+     * The server stores which comment a reply answers (parent_id). The screen groups a thread under its top-level
+     * comment and names the person answered ("replying to"), as in Assignment 2.
+     */
+    private fun toThreads(list: List<PostRepo.Comment>): List<PostComment> {
+        val byId = list.associateBy { it.id }
+        fun thread(c: PostRepo.Comment): String {
+            var current = c
+            repeat(10) { current = byId[current.parentId] ?: return current.id }
+            return current.id
+        }
+        return list.map { c ->
+            val parent = byId[c.parentId]
+            PostComment(
+                id = c.id, authorId = c.authorId, authorName = c.authorName.ifBlank { "Kinnect member" }, text = c.text,
+                imageRef = c.imageRef, createdAt = c.createdAt,
+                parentCommentId = if (parent == null) "" else thread(parent),
+                parentName = parent?.authorName.orEmpty(), likeCount = c.likes, liked = c.likedByMe, pending = c.pending
+            )
         }
     }
 
     /** Builds the list: each top-level comment, then its replies (oldest first, 2 visible until expanded). */
     private fun render() {
-        val withLikes = comments.map { c -> likes[c.id]?.let { c.copy(likeCount = it.first, liked = it.second) } ?: c }
+        val withLikes = comments
         val byId = withLikes.associateBy { it.id }
         val topLevel = withLikes.filter { it.parentCommentId.isBlank() || it.parentCommentId !in byId }
         val ordered = if (newestFirst) topLevel.sortedByDescending { it.createdAt }
@@ -196,67 +188,26 @@ class CommentsActivity : AppCompatActivity() {
         if (uri != null) Glide.with(this).load(uri).centerCrop().into(findViewById<ImageView>(R.id.commentAttachmentImage))
     }
 
+    /**
+     * Comment, reply, or photo comment. Saved and queued at once (the photo first, then the comment that uses it), so it
+     * shows immediately with "Pending" when offline and syncs in order later.
+     */
     private fun send() {
         if (sending) return
         val text = commentInput.text.toString().trim()
         val image = attachment
         if (text.isBlank() && image == null) return
         setSending(true)
-        if (image == null) {
-            write(text, "")
-            return
+        val parent = replyTo?.id
+        Backend.call({ PostRepo.comment(this, postId, text, parent, image) }) { result ->
+            setSending(false)
+            result.onSuccess {
+                commentInput.text.clear()
+                setAttachment(null)
+                clearReply()
+                load(fromServer = false)
+            }.onFailure { Toast.makeText(this, Forms.message(it as? Exception, "Could not add comment"), Toast.LENGTH_LONG).show() }
         }
-        val status = findViewById<TextView>(R.id.commentUploadStatus)
-        MediaUploader.upload(this, image, MediaUploader.IMAGE,
-            onProgress = { status.text = "$it%" },
-            onSuccess = { ref -> write(text, ref) },
-            onError = { message ->
-                setSending(false)
-                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-            })
-    }
-
-    private fun write(text: String, imageRef: String) {
-        val commentId = FirebaseData.comments.child(postId).push().key ?: return setSending(false)
-        val reply = replyTo
-        // A reply to a reply still belongs to the top-level comment of that thread.
-        val threadId = reply?.let { if (it.parentCommentId.isBlank()) it.id else it.parentCommentId }.orEmpty()
-        ProfileCache.get(me) { profile ->
-            val comment = mapOf(
-                "commentId" to commentId,
-                "authorId" to me,
-                "authorName" to profile.name,
-                "text" to text,
-                "imageRef" to imageRef,
-                "parentCommentId" to threadId,
-                "parentName" to (reply?.authorName ?: ""),
-                "createdAt" to mapOf(".sv" to "timestamp")
-            )
-            FirebaseData.comments.child(postId).child(commentId).setValue(comment)
-                .addOnSuccessListener {
-                    notifyPeople(reply, text.ifBlank { "Photo" })
-                    commentInput.text.clear()
-                    setSending(false)
-                    setAttachment(null)
-                    clearReply()
-                }
-                .addOnFailureListener {
-                    setSending(false)
-                    Toast.makeText(this, it.localizedMessage ?: "Could not add comment", Toast.LENGTH_LONG).show()
-                }
-        }
-    }
-
-    /** The post author hears about new comments; the person replied to hears about the reply. */
-    private fun notifyPeople(reply: PostComment?, preview: String) {
-        val notifications = FirebaseData.database.getReference("notifications")
-        val now = mapOf(".sv" to "timestamp")
-        val target = reply?.authorId ?: postAuthorId
-        if (target.isBlank() || target == me) return
-        notifications.child(target).push().setValue(mapOf(
-            "senderId" to me, "type" to if (reply != null) "reply" else "comment", "body" to preview.take(80),
-            "postId" to postId, "createdAt" to now, "read" to false
-        ))
     }
 
     private fun setSending(active: Boolean) {
@@ -266,18 +217,12 @@ class CommentsActivity : AppCompatActivity() {
     }
 
     private fun toggleLike(comment: PostComment) {
-        val reference = FirebaseData.commentLikes.child(comment.id).child(me)
-        val task = if (comment.liked) reference.removeValue() else reference.setValue(true)
-        task.addOnFailureListener { Toast.makeText(this, it.localizedMessage ?: "Could not update the like", Toast.LENGTH_SHORT).show() }
+        Backend.call({ PostRepo.likeComment(comment.id, !comment.liked) }) { load(fromServer = false) }
     }
 
     private fun confirmDelete(comment: PostComment) {
         AlertDialog.Builder(this).setMessage("Delete this comment?")
-            .setPositiveButton("Delete") { _, _ ->
-                FirebaseData.comments.child(postId).child(comment.id).removeValue()
-                    .addOnSuccessListener { FirebaseData.commentLikes.child(comment.id).child(me).removeValue() }
-                    .addOnFailureListener { Toast.makeText(this, it.localizedMessage ?: "Could not delete the comment", Toast.LENGTH_SHORT).show() }
-            }
+            .setPositiveButton("Delete") { _, _ -> Backend.call({ PostRepo.deleteComment(comment.id) }) { load(fromServer = false) } }
             .setNegativeButton("Cancel", null).show()
     }
 

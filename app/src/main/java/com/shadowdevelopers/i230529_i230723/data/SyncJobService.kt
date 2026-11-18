@@ -30,6 +30,7 @@ class SyncJobService : JobService() {
             "profile.update"->"profiles/update.php"
             "post.create"->"posts/create.php"
             "post.react"->"posts/react.php"
+        "post.delete"->"posts/delete.php"
             "comment.create"->"comments/create.php"
             "comment.like"->"comments/like.php"
             "message.send"->"messages/send.php"

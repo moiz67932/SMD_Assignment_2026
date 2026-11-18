@@ -172,9 +172,14 @@ class CreatePostActivity : AppCompatActivity() {
         mediaAdapter.notifyDataSetChanged()
     }
 
+    /**
+     * Saves the post on the phone and queues it (posts/create.php, multipart with images[]). It shows on Home straight
+     * away ("Pending" while offline) and is uploaded in order when the internet is available. The client post UUID
+     * means a retried upload never creates two posts.
+     */
     private fun publish() {
         if (publishing) return
-        val user = FirebaseAuth.getInstance().currentUser ?: run {
+        if (Backend.uid == null) {
             Toast.makeText(this, "Log in to create a post", Toast.LENGTH_SHORT).show()
             return
         }
@@ -184,67 +189,23 @@ class CreatePostActivity : AppCompatActivity() {
             return
         }
         setPublishing(true)
-        uploadAll(0, mutableListOf()) { refs -> writePost(user.uid, text, refs) }
-    }
-
-    /** Uploads the photos one at a time so the progress line can say "Uploading photo 2 of 5 · 40%". */
-    private fun uploadAll(index: Int, refs: MutableList<String>, onDone: (List<String>) -> Unit) {
-        if (index >= selected.size) {
-            onDone(refs)
-            return
-        }
-        val status = findViewById<TextView>(R.id.postUploadStatus)
-        MediaUploader.upload(this, selected[index], MediaUploader.IMAGE,
-            onProgress = { status.text = "Uploading photo ${index + 1} of ${selected.size} · $it%" },
-            onSuccess = { ref ->
-                refs.add(ref)
-                uploadAll(index + 1, refs, onDone)
-            },
-            onError = { message ->
+        findViewById<TextView>(R.id.postUploadStatus).text = if (selected.isEmpty()) "Posting…" else "Preparing ${selected.size} photo${if (selected.size == 1) "" else "s"}…"
+        val details = org.json.JSONObject()
+        if (selected.isEmpty() && background.isNotBlank()) details.put("background", background)
+        if (feeling.isNotBlank()) details.put("feeling", feeling)
+        if (location.isNotBlank()) details.put("location", location)
+        if (event.isNotBlank()) details.put("event", event)
+        if (tagged.isNotEmpty()) details.put("tags", org.json.JSONObject(tagged.toMap()))
+        val photos = selected.toList()
+        Backend.call({ PostRepo.create(this, text, photos, details) }) { result ->
+            result.onSuccess {
+                if (!Backend.online()) Toast.makeText(this, "You're offline. Your post will upload when you reconnect.", Toast.LENGTH_LONG).show()
+                finish()
+            }.onFailure {
                 setPublishing(false)
-                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-            })
-    }
-
-    private fun writePost(uid: String, text: String, images: List<String>) {
-        val postId = FirebaseData.posts.push().key ?: return setPublishing(false)
-        ProfileCache.get(uid) { profile ->
-            val post = mutableMapOf<String, Any>(
-                "postId" to postId,
-                "authorId" to uid,
-                "authorName" to profile.name,
-                "text" to text,
-                "images" to images,
-                "imageCount" to images.size,
-                "background" to if (images.isEmpty()) background else "",
-                "createdAt" to mapOf(".sv" to "timestamp")
-            )
-            if (feeling.isNotBlank()) post["feeling"] = feeling
-            if (location.isNotBlank()) post["location"] = location
-            if (event.isNotBlank()) post["event"] = event
-            if (tagged.isNotEmpty()) post["tags"] = tagged.toMap()
-            FirebaseData.posts.child(postId).setValue(post)
-                .addOnSuccessListener {
-                    notifyTagged(uid, postId)
-                    finish()
-                }
-                .addOnFailureListener {
-                    setPublishing(false)
-                    Toast.makeText(this, it.localizedMessage ?: "Could not publish post", Toast.LENGTH_LONG).show()
-                }
+                Toast.makeText(this, Forms.message(it as? Exception, "Could not publish post"), Toast.LENGTH_LONG).show()
+            }
         }
-    }
-
-    /** Tagged friends get a notification that opens the post. */
-    private fun notifyTagged(me: String, postId: String) {
-        if (tagged.isEmpty()) return
-        val updates = mutableMapOf<String, Any>()
-        tagged.keys.forEach { friend ->
-            val id = FirebaseData.database.getReference("notifications").child(friend).push().key ?: return@forEach
-            updates["notifications/$friend/$id"] = mapOf("senderId" to me, "type" to "tag", "body" to "tagged you in a post", "postId" to postId,
-                "createdAt" to mapOf(".sv" to "timestamp"), "read" to false)
-        }
-        FirebaseData.database.reference.updateChildren(updates)
     }
 
     private fun setPublishing(active: Boolean) {

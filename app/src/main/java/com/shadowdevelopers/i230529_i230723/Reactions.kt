@@ -5,7 +5,6 @@ import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
-import com.google.firebase.database.DataSnapshot
 
 /**
  * The six post reactions. Stored as postReactions/{postId}/{uid} = "Like" | "Love" | ..., so each user has
@@ -33,14 +32,14 @@ object Reactions {
     /** total reactions, the three most used types (for the icons), the user's own reaction, and one other reactor. */
     data class Summary(val total: Int, val top: List<String>, val mine: String?, val someoneElse: String?, val counts: Map<String, Int>)
 
-    fun summarize(snapshot: DataSnapshot, me: String): Summary {
-        val all = snapshot.children.mapNotNull { child -> child.getValue(String::class.java)?.takeIf { it in TYPES }?.let { child.key.orEmpty() to it } }
-        val counts = all.groupingBy { it.second }.eachCount()
+    /** Built from the totals the server sends with each post (plus my offline change, applied by PostRepo). */
+    fun summarize(post: FeedPost, me: String): Summary {
+        val counts = post.reactionCounts.filter { it.key in TYPES && it.value > 0 }
         return Summary(
-            total = all.size,
+            total = counts.values.sum(),
             top = counts.entries.sortedByDescending { it.value }.take(3).map { it.key },
-            mine = all.firstOrNull { it.first == me }?.second,
-            someoneElse = all.firstOrNull { it.first != me }?.first,
+            mine = post.myReaction,
+            someoneElse = null,
             counts = counts
         )
     }
@@ -78,20 +77,15 @@ object Reactions {
     }
 
     /** Sets, changes or removes my reaction. Tapping the reaction I already have removes it. */
-    fun react(context: Context, postId: String, authorId: String, me: String, type: String, current: String?) {
-        val reference = FirebaseData.postReactions.child(postId).child(me)
-        val task = if (current == type) reference.removeValue() else reference.setValue(type)
-        task.addOnFailureListener { Toast.makeText(context, it.localizedMessage ?: "Could not update your reaction", Toast.LENGTH_SHORT).show() }
-        // Tell the author about a new reaction (not about changes or removals, and not about my own posts).
-        if (current == null && authorId.isNotBlank() && authorId != me) {
-            val id = FirebaseData.database.getReference("notifications").child(authorId).push().key ?: return
-            val updates = mutableMapOf<String, Any>("notifications/$authorId/$id" to mapOf(
-                "senderId" to me, "type" to "reaction", "body" to type, "postId" to postId,
-                "createdAt" to mapOf(".sv" to "timestamp"), "read" to false
-            ))
-            FirebaseData.database.reference.updateChildren(updates).addOnSuccessListener {
-                PushQueue.send(authorId, me, "activity", "Kinnect", "reacted to your post")
-            }
+    /**
+     * Sets, changes or removes my reaction (tapping the reaction I already have removes it). Saved locally and queued
+     * (POST posts/react.php); the server keeps one reaction per user per post and notifies the author.
+     */
+    fun react(context: Context, postId: String, authorId: String, me: String, type: String, current: String?, onDone: () -> Unit = {}) {
+        val next = if (current == type) null else type
+        com.shadowdevelopers.i230529_i230723.data.Backend.call({ PostRepo.react(postId, next) }) { result ->
+            result.onFailure { Toast.makeText(context, Forms.message(it as? Exception, "Could not update your reaction"), Toast.LENGTH_SHORT).show() }
+            onDone()
         }
     }
 }

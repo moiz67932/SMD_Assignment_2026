@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.graphics.Color
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -23,7 +24,14 @@ data class FeedPost(
     val feeling: String = "",
     val location: String = "",
     val event: String = "",
-    val tags: Map<String, String> = emptyMap()
+    val tags: Map<String, String> = emptyMap(),
+    /** From the server: reaction totals per type, my own reaction, number of comments, author photo. */
+    val reactionCounts: Map<String, Int> = emptyMap(),
+    val myReaction: String? = null,
+    val commentCount: Int = 0,
+    val authorPhoto: String = "",
+    /** True while this post (or my change to it) is still queued offline and not yet on the server. */
+    val pending: Boolean = false
 ) {
     /** One line under the author name: "feeling happy · at Lahore · with Ali, Sara · Event: ...". */
     fun details(): String = listOfNotNull(
@@ -34,7 +42,35 @@ data class FeedPost(
     ).joinToString(" · ")
 
     companion object {
-        /** posts/{postId} -> FeedPost. images is stored as an ordered list (0, 1, 2 ...). */
+        /** A post from the PHP API (posts/feed.php, posts/get.php) or one created offline (local_images = files on the phone). */
+        fun fromJson(json: org.json.JSONObject): FeedPost {
+            val media = json.optJSONArray("media") ?: org.json.JSONArray()
+            val local = json.optJSONArray("local_images") ?: org.json.JSONArray()
+            val images = (0 until media.length()).map { ProfileCache.mediaRef(media.getJSONObject(it).getString("id")) }
+                .ifEmpty { (0 until local.length()).map { local.getString(it) } }
+            val details = json.optJSONObject("details") ?: org.json.JSONObject()
+            val tags = details.optJSONObject("tags")
+            val reactions = json.optJSONArray("reactions") ?: org.json.JSONArray()
+            return FeedPost(
+                id = json.optString("id"),
+                authorId = json.optString("author_id"),
+                authorName = json.optString("author_name").ifBlank { "Kinnect member" },
+                text = json.optString("body"),
+                createdAt = TimeFormat.parse(json.optString("created_at")),
+                images = images,
+                background = details.optString("background"),
+                feeling = details.optString("feeling"),
+                location = details.optString("location"),
+                event = details.optString("event"),
+                tags = tags?.keys()?.asSequence()?.associateWith { tags.optString(it) }.orEmpty(),
+                reactionCounts = (0 until reactions.length()).associate { reactions.getJSONObject(it).let { r -> r.getString("reaction") to r.getInt("n") } },
+                myReaction = json.optString("my_reaction").takeUnless { json.isNull("my_reaction") || it.isBlank() },
+                commentCount = json.optInt("comment_count"),
+                authorPhoto = ProfileCache.mediaRef(json.optString("author_photo_media_id"))
+            )
+        }
+
+        /** posts/{postId} -> FeedPost (Assignment 2 Firebase shape, kept only for screens not migrated yet). */
         fun from(snapshot: DataSnapshot) = FeedPost(
             id = snapshot.key.orEmpty(),
             authorId = snapshot.child("authorId").getValue(String::class.java).orEmpty(),
@@ -61,7 +97,9 @@ class PostAdapter(
     private val onComments: (FeedPost) -> Unit,
     private val onAuthor: (FeedPost) -> Unit,
     private val onShare: (FeedPost) -> Unit = {},
-    private val onHide: ((FeedPost) -> Unit)? = null
+    private val onHide: ((FeedPost) -> Unit)? = null,
+    /** Called after my own change (reaction, delete) was saved locally, so the screen redraws at once. */
+    private val onChanged: () -> Unit = {}
 ) : RecyclerView.Adapter<PostAdapter.PostViewHolder>() {
     private val posts = mutableListOf<FeedPost>()
     private val attached = mutableSetOf<PostViewHolder>()
@@ -121,26 +159,20 @@ class PostAdapter(
         private var post: FeedPost? = null
         private var myReaction: String? = null
 
+        /** Reactions and comment count now come with the post itself (the feed is refreshed while the screen is open). */
         fun startListening() {
             val current = post ?: return
-            listeners.removeAll()
-            listeners.value(FirebaseData.postReactions.child(current.id)) { snapshot ->
-                val result = Reactions.summarize(snapshot, me)
-                myReaction = result.mine
-                Reactions.bindSummary(reactionIcons, summary, result)
-                showMyReaction()
-            }
-            listeners.value(FirebaseData.comments.child(current.id)) { snapshot ->
-                val count = snapshot.childrenCount.toInt()
-                commentCount.text = when (count) {
-                    0 -> ""
-                    1 -> "1 comment"
-                    else -> "$count comments"
-                }
+            myReaction = current.myReaction
+            Reactions.bindSummary(reactionIcons, summary, Reactions.summarize(current, me))
+            showMyReaction()
+            commentCount.text = when (current.commentCount) {
+                0 -> ""
+                1 -> "1 comment"
+                else -> "${current.commentCount} comments"
             }
         }
 
-        fun stopListening() = listeners.removeAll()
+        fun stopListening() = Unit
 
         /** The Like button shows my reaction (icon, name and colour) or a plain "Like". */
         private fun showMyReaction() {
@@ -167,14 +199,15 @@ class PostAdapter(
             avatar.text = AvatarBinder.initials(post.authorName)
             ProfileCache.get(post.authorId) { if (itemView.tag == post.id) AvatarBinder.bind(avatar, it.name, it.photo) }
             val details = post.details()
-            time.text = "${TimeFormat.ago(post.createdAt)} · Public" + if (details.isBlank()) "" else "\n$details"
+            // "· Pending" while the post or my change to it is still queued offline (it syncs automatically).
+            time.text = "${TimeFormat.ago(post.createdAt)} · Public" + (if (post.pending) " · Pending" else "") + if (details.isBlank()) "" else "\n$details"
             bindText(post)
             bindImages(post)
             author.setOnClickListener { onAuthor(post) }
             avatar.setOnClickListener { onAuthor(post) }
             // Tap: Like / remove my reaction. Long-press: the reaction picker (05) with all six reactions.
             itemView.findViewById<View>(R.id.postLikeButton).apply {
-                setOnClickListener { Reactions.react(context, post.id, post.authorId, me, myReaction ?: "Like", myReaction) }
+                setOnClickListener { Reactions.react(context, post.id, post.authorId, me, myReaction ?: "Like", myReaction, onChanged) }
                 setOnLongClickListener { showReactionPicker(post); true }
             }
             itemView.findViewById<View>(R.id.postSummaryRow).setOnClickListener { showReactionPicker(post) }
@@ -185,28 +218,30 @@ class PostAdapter(
                 setOnClickListener { onHide?.invoke(post) }
             }
             itemView.findViewById<View>(R.id.postMoreButton).setOnClickListener { anchor ->
-                val saved = FirebaseData.database.getReference("saved").child(me).child(post.id)
-                saved.get().addOnSuccessListener { snapshot ->
-                    val isSaved = snapshot.exists()
-                    android.widget.PopupMenu(anchor.context, anchor).apply {
+                // Saved posts are kept on this phone (SQLite); delete goes to the server through the offline queue.
+                val context = anchor.context
+                Backend.call({ Backend.store.entity(me, "saved", post.id) != null }) { result ->
+                    val isSaved = result.getOrDefault(false)
+                    android.widget.PopupMenu(context, anchor).apply {
                         menu.add(0, 1, 0, "Open comments")
                         menu.add(0, 2, 1, if (isSaved) "Remove from saved" else "Save post")
                         if (post.authorId == me) menu.add(0, 3, 2, "Delete post")
                         setOnMenuItemClickListener { item ->
                             when (item.itemId) {
                                 1 -> onComments(post)
-                                2 -> (if (isSaved) saved.removeValue() else saved.setValue(true)).addOnSuccessListener {
-                                    android.widget.Toast.makeText(anchor.context, if (isSaved) "Removed from saved" else "Saved", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                                3 -> androidx.appcompat.app.AlertDialog.Builder(anchor.context).setTitle("Delete this post?")
+                                2 -> Backend.call({
+                                    if (isSaved) Backend.store.deleteEntity(me, "saved", post.id)
+                                    else Backend.store.putEntity(me, "saved", post.id, org.json.JSONObject().put("id", post.id).put("saved_at", System.currentTimeMillis()).toString())
+                                }) { android.widget.Toast.makeText(context, if (isSaved) "Removed from saved" else "Saved", android.widget.Toast.LENGTH_SHORT).show() }
+                                3 -> androidx.appcompat.app.AlertDialog.Builder(context).setTitle("Delete this post?")
                                     .setMessage("This cannot be undone.")
-                                    .setPositiveButton("Delete") { _, _ -> FirebaseData.posts.child(post.id).removeValue() }
+                                    .setPositiveButton("Delete") { _, _ -> Backend.call({ PostRepo.delete(post.id) }) { onChanged() } }
                                     .setNegativeButton("Cancel", null).show()
                             }
                             true
                         }
                     }.show()
-                }.addOnFailureListener { onComments(post) }
+                }
             }
         }
 
@@ -239,7 +274,7 @@ class PostAdapter(
                         scaleY = 1.1f
                     }
                     setOnClickListener {
-                        Reactions.react(context, post.id, post.authorId, me, type, myReaction)
+                        Reactions.react(context, post.id, post.authorId, me, type, myReaction, onChanged)
                         popup.dismiss()
                     }
                 }

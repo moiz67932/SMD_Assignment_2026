@@ -28,9 +28,10 @@ class HomeActivity : AppCompatActivity() {
     private val me by lazy { Backend.uid.orEmpty() }
     private val listeners = ListenerBag()
     /** One live query per author currently in the feed. */
-    private val authorQueries = mutableMapOf<String, Pair<Query, ValueEventListener>>()
     /** authorId -> that author's latest posts */
-    private val postsByAuthor = mutableMapOf<String, List<FeedPost>>()
+    /** The feed as last shown (SQLite first, then the server). */
+    private var feedPosts: List<FeedPost> = emptyList()
+    private var feedLoaded = false
     private val hidden = mutableSetOf<String>()
     private var feedError: String? = null
     private lateinit var feedAdapter: PostAdapter
@@ -75,7 +76,8 @@ class HomeActivity : AppCompatActivity() {
             onHide = { post ->
                 hidden.add(post.id)
                 showFeed()
-            }
+            },
+            onChanged = { loadFeed(fromServer = false) }
         )
         feed.adapter = feedAdapter
 
@@ -109,10 +111,32 @@ class HomeActivity : AppCompatActivity() {
         if (me.isBlank()) return
         feedAdapter.resume()
         Stories.removeExpired(me)
-        listeners.value(FirebaseData.friends.child(me), onError = { feedError = Forms.message(it); showFeed() }) { snapshot ->
-            val friends = snapshot.children.filter { it.getValue(Boolean::class.java) == true }.mapNotNull { it.key }
-            setAuthors(listOf(me) + friends.take(MAX_FRIEND_AUTHORS))
-            setStoryOwners(listOf(me) + friends.take(MAX_FRIEND_AUTHORS))
+        // Feed (04): SQLite first (instant, offline), then GET posts/feed.php every 15 s and after offline actions sync.
+        loadFeed(fromServer = false)
+        listeners.poll(15_000) { loadFeed(fromServer = true) }
+        // Story row owners = me + my friends.
+        val friendsChanged: () -> Unit = { setStoryOwners(listOf(me) + Friends.friends.take(MAX_FRIEND_AUTHORS)) }
+        Friends.observe(friendsChanged)
+        listeners.onRemove { Friends.unobserve(friendsChanged) }
+        listeners.poll(30_000) { Friends.refresh() }
+        friendsChanged()
+    }
+
+    private fun loadFeed(fromServer: Boolean) {
+        Backend.call({ PostRepo.feed(fromServer = fromServer) }) { result ->
+            result.onSuccess { posts ->
+                feedPosts = posts
+                feedLoaded = true
+                feedError = null
+                showFeed()
+            }.onFailure {
+                // Offline or server down: keep showing the SQLite copy; only explain when there is nothing to show.
+                if (fromServer) {
+                    feedLoaded = true
+                    if (feedPosts.isEmpty()) feedError = Forms.message(it as? Exception, "Could not load your feed")
+                    showFeed()
+                }
+            }
         }
     }
 
@@ -120,40 +144,12 @@ class HomeActivity : AppCompatActivity() {
         badges.stop()
         feedAdapter.pause()
         listeners.removeAll()
-        authorQueries.values.forEach { (query, listener) -> query.removeEventListener(listener) }
-        authorQueries.clear()
         (storyNodes.values + seenQueries.values + liveQueries.values).forEach { (query, listener) -> query.removeEventListener(listener) }
         storyNodes.clear()
         seenQueries.clear()
         liveQueries.clear()
         liveNow.clear()
         super.onStop()
-    }
-
-    /** Starts listening to new authors and stops listening to people who are no longer friends. */
-    private fun setAuthors(authors: List<String>) {
-        authorQueries.keys.filter { it !in authors }.forEach { uid ->
-            authorQueries.remove(uid)?.let { (query, listener) -> query.removeEventListener(listener) }
-            postsByAuthor.remove(uid)
-        }
-        authors.filter { it !in authorQueries }.forEach { uid ->
-            val query = FirebaseData.posts.orderByChild("authorId").equalTo(uid).limitToLast(POSTS_PER_AUTHOR)
-            val listener = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    postsByAuthor[uid] = snapshot.children.map { FeedPost.from(it) }
-                    feedError = null
-                    showFeed()
-                }
-
-                override fun onCancelled(error: DatabaseError) {
-                    feedError = Forms.message(error)
-                    showFeed()
-                }
-            }
-            query.addValueEventListener(listener)
-            authorQueries[uid] = query to listener
-        }
-        showFeed()
     }
 
     /**
@@ -249,9 +245,9 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun showFeed() {
-        val items = postsByAuthor.values.flatten().filter { it.id !in hidden }.sortedByDescending { it.createdAt }
+        val items = feedPosts.filter { it.id !in hidden }
         feedAdapter.setPosts(items)
-        val loaded = authorQueries.keys.all { it in postsByAuthor }
+        val loaded = feedLoaded
         findViewById<TextView>(R.id.feedEmpty).apply {
             visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
             text = when {
@@ -267,7 +263,6 @@ class HomeActivity : AppCompatActivity() {
     }
 
     companion object {
-        private const val POSTS_PER_AUTHOR = 20
         private const val MAX_FRIEND_AUTHORS = 40
     }
 }

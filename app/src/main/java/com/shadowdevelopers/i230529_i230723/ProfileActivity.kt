@@ -39,7 +39,8 @@ class ProfileActivity : AppCompatActivity() {
             me = uid.orEmpty(),
             onComments = { post -> startActivity(Intent(this, CommentsActivity::class.java).putExtra("post_id", post.id)) },
             onAuthor = {},
-            onShare = { post -> startActivity(Intent(this, SharePostActivity::class.java).putExtra("post_id", post.id)) }
+            onShare = { post -> startActivity(Intent(this, SharePostActivity::class.java).putExtra("post_id", post.id)) },
+            onChanged = { uid?.let { loadPosts(it, fromServer = false) } }
         )
         rowAdapter = TextRowAdapter { row ->
             when {
@@ -80,10 +81,9 @@ class ProfileActivity : AppCompatActivity() {
         // My profile (GET profiles/get.php: birthday, gender and join date are returned only to me) and my friends
         // (GET friends/of.php), both shown from SQLite first so the screen works offline.
         listeners.poll(15_000) { loadProfile(userId) }
-        listeners.value(FirebaseData.posts.orderByChild("authorId").equalTo(userId)) { snapshot ->
-            allPosts = snapshot.children.map { FeedPost.from(it) }.sortedByDescending { it.createdAt }
-            selectTab(tab)
-        }
+        // My posts: SQLite first, then GET posts/feed.php?author=me.
+        loadPosts(userId, fromServer = false)
+        listeners.poll(20_000) { loadPosts(userId, fromServer = true) }
     }
 
     /** Posts = everything; Photos = posts with pictures; Videos = my highlighted video stories; Groups = my groups. */
@@ -124,6 +124,12 @@ class ProfileActivity : AppCompatActivity() {
                 empty.text = if (name == "Photos") "No photos yet" else "No posts yet"
                 empty.visibility = if (posts.isEmpty()) View.VISIBLE else View.GONE
             }
+        }
+    }
+
+    private fun loadPosts(userId: String, fromServer: Boolean) {
+        Backend.call({ PostRepo.feed(author = userId, fromServer = fromServer) }) { result ->
+            result.onSuccess { allPosts = it; selectTab(tab) }
         }
     }
 

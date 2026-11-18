@@ -44,6 +44,10 @@ object Backend {
 
     fun newId(): String = UUID.randomUUID().toString()
 
+    /** "Now" in the server's format (UTC), for items created offline until the server gives them its own time. */
+    fun nowUtc(): String = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.US)
+        .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date())
+
     /** True when the phone has a validated internet connection (a hint only: a request can still fail). */
     fun online(): Boolean {
         val manager = app.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager

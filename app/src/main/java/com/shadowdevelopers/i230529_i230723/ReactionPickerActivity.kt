@@ -48,14 +48,17 @@ class ReactionPickerActivity : AppCompatActivity() {
         loadPost()
     }
 
-    private fun loadPost() {
-        FirebaseData.posts.child(postId).get().addOnSuccessListener { snapshot ->
-            if (!snapshot.exists()) {
-                Toast.makeText(this, "This post was removed", Toast.LENGTH_SHORT).show()
-                finish()
-                return@addOnSuccessListener
+    /** The post, its reaction summary and the newest comment: SQLite first, then the server (also while offline). */
+    private fun loadPost(fromServer: Boolean = false) {
+        Backend.call({ PostRepo.post(postId, fromServer) to runCatching { PostRepo.comments(postId, fromServer) }.getOrDefault(emptyList()) }) { result ->
+            val (post, comments) = result.getOrNull() ?: return@call
+            if (post == null) {
+                if (fromServer) {
+                    Toast.makeText(this, "This post is not available", Toast.LENGTH_SHORT).show()
+                    finish()
+                }
+                return@call
             }
-            val post = FeedPost.from(snapshot)
             authorId = post.authorId
             val firstName = post.authorName.substringBefore(" ")
             findViewById<TextView>(R.id.reactionToolbarTitle).text = if (post.authorId == me) "Your post" else "$firstName's post"
@@ -68,38 +71,32 @@ class ReactionPickerActivity : AppCompatActivity() {
             post.images.firstOrNull()?.let { ref ->
                 findViewById<ImageView>(R.id.reactionPostImage).apply { visibility = View.VISIBLE; MediaLoader.load(this, ref) }
             }
-        }.addOnFailureListener { Toast.makeText(this, it.localizedMessage ?: "Could not load the post", Toast.LENGTH_LONG).show() }
-    }
-
-    override fun onStart() {
-        super.onStart()
-        if (postId.isBlank()) return
-        listeners.value(FirebaseData.postReactions.child(postId)) { snapshot ->
-            val summary = Reactions.summarize(snapshot, me)
+            val summary = Reactions.summarize(post, me)
             myReaction = summary.mine
             Reactions.bindSummary(
                 listOf(findViewById(R.id.reactionSummary1), findViewById(R.id.reactionSummary2), findViewById(R.id.reactionSummary3)),
                 findViewById(R.id.reactionSummaryText), summary
             )
             highlight()
-        }
-        listeners.value(FirebaseData.comments.child(postId)) { snapshot ->
-            val count = snapshot.childrenCount.toInt()
+            val count = post.commentCount
             findViewById<TextView>(R.id.reactionCommentCount).text = if (count == 1) "1 comment" else if (count == 0) "" else "$count comments"
             // "Most relevant": the newest top-level comment.
-            val latest = snapshot.children.filter { it.child("parentCommentId").getValue(String::class.java).isNullOrBlank() }
-                .maxByOrNull { it.child("createdAt").getValue(Long::class.java) ?: 0L }
+            val latest = comments.filter { it.parentId.isBlank() }.maxByOrNull { it.createdAt }
             val row = findViewById<View>(R.id.reactionSampleComment)
             findViewById<View>(R.id.reactionMostRelevant).visibility = if (latest == null) View.GONE else View.VISIBLE
             row.visibility = if (latest == null) View.GONE else View.VISIBLE
             if (latest != null) {
-                val name = latest.child("authorName").getValue(String::class.java) ?: "Kinnect member"
-                val text = latest.child("text").getValue(String::class.java).orEmpty().ifBlank { "Photo" }
-                findViewById<TextView>(R.id.reactionCommentText).text = "$name\n$text"
+                findViewById<TextView>(R.id.reactionCommentText).text = "${latest.authorName.ifBlank { "Kinnect member" }}\n${latest.text.ifBlank { "Photo" }}"
                 val commenter = findViewById<TextView>(R.id.reactionCommenterButton)
-                ProfileCache.get(latest.child("authorId").getValue(String::class.java).orEmpty()) { AvatarBinder.bind(commenter, it.name, it.photo) }
+                ProfileCache.get(latest.authorId) { AvatarBinder.bind(commenter, it.name, it.photo) }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (postId.isBlank()) return
+        listeners.poll(8_000) { loadPost(fromServer = true) }
     }
 
     override fun onStop() {
