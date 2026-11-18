@@ -23,6 +23,9 @@ media.properties
 fcm-server/node_modules/
 fcm-server/.env
 fcm-server/serviceAccountKey*.json
+backend/.env
+backend/vendor/
+backend/var/
 *.jks
 *.keystore
 
