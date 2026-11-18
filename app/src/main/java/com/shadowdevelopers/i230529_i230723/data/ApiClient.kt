@@ -4,6 +4,8 @@ import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.io.File
+import java.util.UUID
 
 /** Synchronous transport for repository workers; never call from the main thread. */
 class ApiClient(baseUrl: String, private val sessions: SecureSession) {
@@ -29,6 +31,40 @@ class ApiClient(baseUrl: String, private val sessions: SecureSession) {
             val result=try { JSONObject(text) } catch(e:Exception) { throw IOException("Server returned invalid JSON (HTTP $status)",e) }
             if(status !in 200..299){val error=result.optJSONObject("error");throw ApiException(status,error?.optString("code")?:"http_error",error?.optString("message")?:"Request failed")}
             return result
+        }finally{connection.disconnect()}
+    }
+    data class Upload(val field: String, val file: File, val mime: String)
+    fun multipart(path: String, fields: JSONObject, files: List<Upload>): JSONObject {
+        require(!path.startsWith("/") && !path.contains("://") && !path.contains(".."))
+        val boundary="Kinnect"+UUID.randomUUID().toString()
+        val connection=URL(base+path).openConnection() as HttpURLConnection
+        try {
+            connection.connectTimeout=15_000;connection.readTimeout=60_000
+            connection.instanceFollowRedirects=false;connection.requestMethod="POST";connection.doOutput=true
+            connection.setChunkedStreamingMode(64*1024)
+            connection.setRequestProperty("Content-Type","multipart/form-data; boundary=$boundary")
+            sessions.token()?.let {connection.setRequestProperty("Authorization","Bearer $it")}
+            connection.outputStream.buffered().use { output ->
+                fun write(s:String){output.write(s.toByteArray(Charsets.UTF_8))}
+                val keys=fields.keys()
+                while(keys.hasNext()){
+                    val key=keys.next();require(key.matches(Regex("[a-zA-Z0-9_]+")))
+                    write("--$boundary\r\nContent-Disposition: form-data; name=\"$key\"\r\n\r\n${fields.get(key)}\r\n")
+                }
+                files.forEach { part ->
+                    require(part.field.matches(Regex("[a-zA-Z0-9_]+(\\[\\])?")))
+                    require(part.mime.matches(Regex("[a-zA-Z0-9.+-]+/[a-zA-Z0-9.+-]+")))
+                    val filename=part.file.name.replace(Regex("[^a-zA-Z0-9._-]"),"_")
+                    write("--$boundary\r\nContent-Disposition: form-data; name=\"${part.field}\"; filename=\"$filename\"\r\nContent-Type: ${part.mime}\r\n\r\n")
+                    part.file.inputStream().use {it.copyTo(output)};write("\r\n")
+                }
+                write("--$boundary--\r\n")
+            }
+            val status=connection.responseCode
+            val raw=(if(status in 200..299)connection.inputStream else connection.errorStream)?.bufferedReader()?.use{it.readText()}.orEmpty()
+            val response=try{JSONObject(raw)}catch(e:Exception){throw IOException("Invalid multipart response (HTTP $status)",e)}
+            if(status !in 200..299){val error=response.optJSONObject("error");throw ApiException(status,error?.optString("code")?:"upload_failed",error?.optString("message")?:"Upload failed")}
+            return response
         }finally{connection.disconnect()}
     }
     /** Login credentials are used only for this request; the password is never persisted. */

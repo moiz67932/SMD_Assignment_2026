@@ -33,7 +33,15 @@ class SyncJobService : JobService() {
                                 if(action==null){retry=store.hasRetryableActions(account);break}
                                 try {
                                     val payload=JSONObject(action.payload).put("action_uuid",action.uuid)
-                                    val response=api.post(endpoint(action.operation),payload)
+                                    val attachments=payload.optJSONArray("local_files")
+                                    payload.remove("local_files")
+                                    val response=if(attachments!=null){
+                                        val uploads=(0 until attachments.length()).map { i ->
+                                            val part=attachments.getJSONObject(i)
+                                            ApiClient.Upload(part.getString("field"),PendingMedia.resolve(applicationContext,account,part.getString("path")),part.getString("mime"))
+                                        }
+                                        api.multipart(endpoint(action.operation),payload,uploads)
+                                    }else api.post(endpoint(action.operation),payload)
                                     // User may have logged out while the request was in flight.
                                     if(sessions.accountId()!=account || sessions.token()==null)break
                                     val kind=action.operation.substringBefore('.')
@@ -71,6 +79,13 @@ class SyncJobService : JobService() {
         "story.create"->"stories/create.php"
         "story.view"->"stories/view.php"
         "device.register"->"devices/register.php"
+        "device.unregister"->"devices/unregister.php"
+        "media.upload"->"media/upload.php"
+        "story.delete"->"stories/delete.php"
+        "story.react"->"stories/react.php"
+        "comment.delete"->"comments/delete.php"
+        "notification.read"->"notifications/read.php"
+        "close_friend.set"->"close-friends/set.php"
         else->if(operation.startsWith("friend."))"friends/action.php" else error("Unsupported operation $operation")
     }
     companion object {
