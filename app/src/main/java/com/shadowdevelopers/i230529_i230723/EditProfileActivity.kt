@@ -9,11 +9,8 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.MutableData
-import com.google.firebase.database.Transaction
+import com.shadowdevelopers.i230529_i230723.data.Backend
+import org.json.JSONObject
 
 /**
  * Edit profile (16). Also the first-time setup step: a new account must pick a unique username and
@@ -21,7 +18,6 @@ import com.google.firebase.database.Transaction
  * writes every field to users/{uid} (private) and profiles/{uid} (public, used by search and lists).
  */
 class EditProfileActivity : AppCompatActivity() {
-    private val user by lazy { FirebaseAuth.getInstance().currentUser }
     /** True for a brand-new account: after saving, go to Home instead of back. */
     private var firstSetup = false
     private var oldUsername = ""
@@ -38,7 +34,7 @@ class EditProfileActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_edit_profile)
-        val uid = user?.uid
+        val uid = Backend.uid
         if (uid == null) {
             Toast.makeText(this, "Please log in to edit your profile", Toast.LENGTH_SHORT).show()
             finish()
@@ -52,26 +48,34 @@ class EditProfileActivity : AppCompatActivity() {
         saveButton = findViewById(R.id.saveButton)
         saveButton.isEnabled = false
 
-        FirebaseData.users.child(uid).get().addOnSuccessListener { snapshot ->
-            firstSetup = snapshot.child("profileSetupComplete").getValue(Boolean::class.java) != true
-            oldUsername = text(snapshot, "username")
-            photoRef = text(snapshot, "photo")
-            coverRef = text(snapshot, "cover")
-            nameInput.setText(text(snapshot, "name"))
-            usernameInput.setText(oldUsername)
-            websiteInput.setText(text(snapshot, "website"))
-            bioInput.setText(text(snapshot, "bio"))
-            phoneInput.setText(text(snapshot, "phone"))
-            findViewById<EditText>(R.id.profileEmailValue).setText(text(snapshot, "email").ifBlank { user?.email.orEmpty() })
-            findViewById<EditText>(R.id.profileGenderValue).setText(text(snapshot, "gender"))
-            showPhoto()
-            MediaLoader.load(findViewById(R.id.editCoverImage), coverRef.ifBlank { null })
-            if (coverRef.isBlank()) findViewById<ImageView>(R.id.editCoverImage).setImageDrawable(null)
-            // A first-time user cannot leave setup without saving.
-            findViewById<TextView>(R.id.backButton).visibility = if (firstSetup) View.INVISIBLE else View.VISIBLE
-            saveButton.isEnabled = true
-        }.addOnFailureListener {
-            Toast.makeText(this, it.localizedMessage ?: "Could not load profile", Toast.LENGTH_LONG).show()
+        // GET profiles/get.php (my own profile also returns email, phone and birthday). Offline: the SQLite copy.
+        Backend.call({
+            runCatching { Backend.api.get("profiles/get.php").getJSONObject("user") }
+                .onSuccess { Backend.store.putEntity(uid, "user", uid, it.toString()) }
+                .getOrElse { error -> Backend.store.entity(uid, "user", uid)?.let { JSONObject(it) } ?: throw error }
+        }) { result ->
+            result.onSuccess { user ->
+                fun text(key: String) = user.optString(key).takeUnless { it == "null" }.orEmpty()
+                firstSetup = !(user.optInt("profile_setup_complete") == 1 || user.optBoolean("profile_setup_complete"))
+                oldUsername = text("username")
+                photoRef = ProfileCache.mediaRef(text("photo_media_id"))
+                coverRef = ProfileCache.mediaRef(text("cover_media_id"))
+                nameInput.setText(text("display_name"))
+                usernameInput.setText(oldUsername)
+                websiteInput.setText(text("website"))
+                bioInput.setText(text("bio"))
+                phoneInput.setText(text("phone"))
+                findViewById<EditText>(R.id.profileEmailValue).setText(text("email"))
+                findViewById<EditText>(R.id.profileGenderValue).setText(text("gender"))
+                showPhoto()
+                MediaLoader.load(findViewById(R.id.editCoverImage), coverRef.ifBlank { null })
+                if (coverRef.isBlank()) findViewById<ImageView>(R.id.editCoverImage).setImageDrawable(null)
+                // A first-time user cannot leave setup without saving.
+                findViewById<TextView>(R.id.backButton).visibility = if (firstSetup) View.INVISIBLE else View.VISIBLE
+                saveButton.isEnabled = true
+            }.onFailure {
+                Toast.makeText(this, Forms.message(it as? Exception, "Could not load profile"), Toast.LENGTH_LONG).show()
+            }
         }
 
         findViewById<View>(R.id.backButton).setOnClickListener { finish() }
@@ -84,8 +88,6 @@ class EditProfileActivity : AppCompatActivity() {
         saveButton.setOnClickListener { save(uid) }
         Forms.onKeyboardAction(phoneInput) { save(uid) } // Done on the last field = Save
     }
-
-    private fun text(snapshot: DataSnapshot, key: String) = snapshot.child(key).getValue(String::class.java).orEmpty()
 
     private fun showPhoto() {
         AvatarBinder.bind(findViewById(R.id.editProfileAvatar), nameInput.text.toString().ifBlank { "?" }, photoRef)
@@ -139,64 +141,26 @@ class EditProfileActivity : AppCompatActivity() {
         }
         Forms.hideKeyboard(this)
         Forms.setBusy(saveButton, true, "Saving…")
-        if (username == oldUsername) {
-            writeProfile(uid, name, username, bio)
-            return
-        }
-        // Username uniqueness: usernames/{name} can only be claimed if nobody owns it yet (transaction + rules).
-        FirebaseData.usernames.child(username).runTransaction(object : Transaction.Handler {
-            override fun doTransaction(currentData: MutableData): Transaction.Result {
-                if (currentData.value != null && currentData.value != uid) return Transaction.abort()
-                currentData.value = uid
-                return Transaction.success(currentData)
-            }
-
-            override fun onComplete(error: DatabaseError?, committed: Boolean, currentData: DataSnapshot?) {
-                if (!committed || error != null) {
-                    Forms.setBusy(saveButton, false)
-                    Forms.error(usernameInput, "That username is already taken")
-                } else {
-                    writeProfile(uid, name, username, bio)
-                }
-            }
-        })
-    }
-
-    private fun writeProfile(uid: String, name: String, username: String, bio: String) {
-        val website = websiteInput.text.toString().trim()
-        val parts = name.lowercase().split(" ").filter { it.isNotBlank() }
-        val private = mapOf<String, Any>(
-            "name" to name, "username" to username, "usernameLower" to username, "bio" to bio,
-            "website" to website, "phone" to phoneInput.text.toString().trim(),
-            "photo" to photoRef, "cover" to coverRef,
-            "profileSetupComplete" to true, "updatedAt" to mapOf(".sv" to "timestamp")
-        )
-        // Public copy: the lower-case fields power Search (prefix queries on first, last and full name).
-        val public = mapOf<String, Any>(
-            "uid" to uid, "name" to name, "nameLower" to name.lowercase(),
-            "firstNameLower" to parts.firstOrNull().orEmpty(), "lastNameLower" to parts.drop(1).lastOrNull().orEmpty(),
-            "username" to username, "usernameLower" to username, "bio" to bio, "website" to website,
-            "photo" to photoRef, "cover" to coverRef, "profileSetupComplete" to true
-        )
-        FirebaseData.users.child(uid).updateChildren(private)
-            .addOnSuccessListener {
-                FirebaseData.profiles.child(uid).updateChildren(public).addOnSuccessListener {
-                    if (oldUsername.isNotBlank() && oldUsername != username) FirebaseData.usernames.child(oldUsername).removeValue()
-                    ProfileCache.put(UserProfile(uid, name, username, bio, photoRef, coverRef))
-                    Session.setProfileComplete(this, uid, true)
-                    user?.email?.let { Session.saveRecent(this, it, name, photoRef) }
-                    Toast.makeText(this, "Profile saved", Toast.LENGTH_SHORT).show()
-                    if (firstSetup) Session.startFresh(this, HomeActivity::class.java) else finish()
-                }.addOnFailureListener {
-                    Forms.setBusy(saveButton, false)
-                    Toast.makeText(this, Forms.message(it, "Could not publish profile"), Toast.LENGTH_LONG).show()
-                }
-            }
-            .addOnFailureListener {
+        // POST profiles/update.php. The server checks the username is unique (409 username_taken) and saves everything
+        // in one transaction; the action UUID makes a retried save safe.
+        val body = JSONObject().put("action_uuid", Backend.newId()).put("name", name).put("username", username).put("bio", bio)
+            .put("website", websiteInput.text.toString().trim()).put("phone", phoneInput.text.toString().trim())
+            .put("photo_media_id", photoRef.removePrefix("srv:").ifBlank { JSONObject.NULL })
+            .put("cover_media_id", coverRef.removePrefix("srv:").ifBlank { JSONObject.NULL })
+        Backend.call({ Backend.api.post("profiles/update.php", body).getJSONObject("user") }) { result ->
+            result.onSuccess { user ->
+                ProfileCache.putJson(user)
+                Session.setProfileComplete(this, uid, true)
+                Session.recentEmail(this)?.let { Session.saveRecent(this, it, name, photoRef) }
+                Toast.makeText(this, "Profile saved", Toast.LENGTH_SHORT).show()
+                if (firstSetup) Session.startFresh(this, HomeActivity::class.java) else finish()
+            }.onFailure {
                 Forms.setBusy(saveButton, false)
-                if (oldUsername != username) FirebaseData.usernames.child(username).removeValue()
-                Toast.makeText(this, Forms.message(it, "Could not save profile"), Toast.LENGTH_LONG).show()
+                val error = it as? com.shadowdevelopers.i230529_i230723.data.ApiClient.ApiException
+                if (error?.code == "username_taken") Forms.error(usernameInput, "That username is already taken")
+                else Toast.makeText(this, Forms.message(it as? Exception, "Could not save profile"), Toast.LENGTH_LONG).show()
             }
+        }
     }
 
     companion object {

@@ -4,7 +4,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.appcompat.app.AppCompatActivity
-import com.google.firebase.auth.FirebaseAuth
+import com.shadowdevelopers.i230529_i230723.data.Backend
 
 /**
  * Splash (01). Visible for exactly 5 seconds. The profile check starts immediately in parallel,
@@ -25,35 +25,37 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val user = FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            profileComplete = Session.profileComplete(this, user.uid)
-            FirebaseData.users.child(user.uid).child("profileSetupComplete").get()
-                .addOnSuccessListener { snapshot ->
-                    // A missing value means the profile was never saved: treat it as unfinished.
-                    val complete = snapshot.getValue(Boolean::class.java) == true
+        // A stored session token is enough to continue (works offline). The server check refreshes the
+        // remembered "profile finished?" flag and catches a revoked token (then the user logs in again).
+        val uid = Backend.uid
+        if (uid != null) {
+            profileComplete = Session.profileComplete(this, uid)
+            Backend.call({ Backend.me() }) { result ->
+                result.onSuccess { user ->
+                    val complete = user.optInt("profile_setup_complete") == 1 || user.optBoolean("profile_setup_complete")
                     profileComplete = complete
-                    Session.setProfileComplete(this, user.uid, complete)
+                    Session.setProfileComplete(this, uid, complete)
+                }.onFailure { error ->
+                    if (error is com.shadowdevelopers.i230529_i230723.data.ApiClient.ApiException && error.status == 401) checkFailed = true
                 }
-                .addOnFailureListener { checkFailed = true }
+            }
         }
         handler.postDelayed(navigate, 5000)
     }
 
     private fun route() {
-        val user = FirebaseAuth.getInstance().currentUser
+        val uid = Backend.uid
         val target = when {
-            user == null -> LoginActivity::class.java
-            profileComplete == true -> HomeActivity::class.java
-            profileComplete == false -> EditProfileActivity::class.java
+            uid == null -> LoginActivity::class.java
             checkFailed -> {
-                // Could not read the profile (for example the database refused access): start again from Log in.
-                FirebaseAuth.getInstance().signOut()
-                android.widget.Toast.makeText(this, "Could not load your account. Please log in again.", android.widget.Toast.LENGTH_LONG).show()
+                // The server says the token is no longer valid (logged out elsewhere or expired).
+                Backend.background { Backend.logout() }
+                android.widget.Toast.makeText(this, "Your session ended. Please log in again.", android.widget.Toast.LENGTH_LONG).show()
                 LoginActivity::class.java
             }
-            // Still waiting on a slow network after 5 s and nothing remembered: the setup screen loads the profile itself.
-            else -> EditProfileActivity::class.java
+            profileComplete == false -> EditProfileActivity::class.java
+            // Finished profile, or offline with a stored token: straight to Home (it shows the SQLite cache).
+            else -> HomeActivity::class.java
         }
         Session.startFresh(this, target)
     }

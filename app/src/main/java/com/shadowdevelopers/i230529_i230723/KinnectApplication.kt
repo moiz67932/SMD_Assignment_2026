@@ -5,18 +5,16 @@ import android.app.Application
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.DatabaseReference
-import com.google.firebase.database.FirebaseDatabase
 
 class KinnectApplication : Application(), Application.ActivityLifecycleCallbacks {
     private var startedActivities = 0
     private val handler = Handler(Looper.getMainLooper())
-    private var presenceReference: DatabaseReference? = null
-    private var connectionListener: com.google.firebase.database.ValueEventListener? = null
 
     override fun onCreate() {
         super.onCreate()
+        com.shadowdevelopers.i230529_i230723.data.Backend.init(this)
+        MediaLoader.init(this)
+        FirebaseNotifications.init(this)
         registerActivityLifecycleCallbacks(this)
         FirebaseData.database.getReference(".info/serverTimeOffset").addValueEventListener(object : com.google.firebase.database.ValueEventListener {
             override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
@@ -34,7 +32,7 @@ class KinnectApplication : Application(), Application.ActivityLifecycleCallbacks
         inForeground = true
         ExternalLaunch.clear()
         handler.removeCallbacks(markOffline)
-        if (FirebaseAuth.getInstance().currentUser != null) {
+        if (com.shadowdevelopers.i230529_i230723.data.Backend.uid != null) {
             connectPresence()
             CallManager.startListening(this) // incoming calls ring anywhere in the app while signed in
             KinnectBackgroundService.start(this) // keeps messages and calls coming after the app is closed
@@ -59,42 +57,45 @@ class KinnectApplication : Application(), Application.ActivityLifecycleCallbacks
         }
     }
 
-    private fun connectPresence() {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
-        val database = FirebaseDatabase.getInstance().reference
-        presenceReference = database.child("presence").child(uid)
-        connectionListener?.let { database.child(".info/connected").removeEventListener(it) }
-        val listener = object : com.google.firebase.database.ValueEventListener {
-            override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
-                if (snapshot.getValue(Boolean::class.java) != true) return
-                val reference = presenceReference ?: return
-                reference.onDisconnect().setValue(mapOf("online" to false, "lastSeen" to mapOf(".sv" to "timestamp")))
-                    .addOnSuccessListener { reference.setValue(mapOf("online" to true, "lastSeen" to mapOf(".sv" to "timestamp"))) }
+    /**
+     * Online status (green dot, "Active now"): while any Kinnect screen is open, POST presence/heartbeat.php every
+     * 20 s. The server counts the user online until 45 s after the last heartbeat. When the app goes to the
+     * background, presence/leave.php ends it at once. Pending offline actions are retried at the same time.
+     */
+    private val heartbeat: Runnable = object : Runnable {
+        override fun run() {
+            if (com.shadowdevelopers.i230529_i230723.data.Backend.uid == null) return
+            com.shadowdevelopers.i230529_i230723.data.Backend.background {
+                com.shadowdevelopers.i230529_i230723.data.Backend.api.post("presence/heartbeat.php", org.json.JSONObject())
             }
-
-            override fun onCancelled(error: com.google.firebase.database.DatabaseError) = Unit
+            com.shadowdevelopers.i230529_i230723.data.Backend.requestSync()
+            handler.postDelayed(this, HEARTBEAT_MS)
         }
-        connectionListener = listener
-        database.child(".info/connected").addValueEventListener(listener)
+    }
+
+    private fun connectPresence() {
+        handler.removeCallbacks(heartbeat)
+        handler.post(heartbeat)
     }
 
     fun setOffline(onComplete: () -> Unit = {}) {
-        val database = FirebaseDatabase.getInstance().reference
-        connectionListener?.let { database.child(".info/connected").removeEventListener(it) }
-        connectionListener = null
-        val reference = presenceReference
-        presenceReference = null
-        val uid = FirebaseAuth.getInstance().currentUser?.uid
-        if (uid == null || reference == null) {
-            onComplete()
-            return
-        }
-        reference.setValue(mapOf("online" to false, "lastSeen" to mapOf(".sv" to "timestamp"))).addOnCompleteListener { onComplete() }
+        handler.removeCallbacks(heartbeat)
+        if (com.shadowdevelopers.i230529_i230723.data.Backend.uid == null) return onComplete()
+        com.shadowdevelopers.i230529_i230723.data.Backend.call({
+            com.shadowdevelopers.i230529_i230723.data.Backend.api.post("presence/leave.php", org.json.JSONObject())
+        }) { onComplete() }
+    }
+
+    /** Right after log in / sign up: register this phone for pushes, start presence and the listeners. */
+    fun onSignedIn() {
+        FirebaseNotifications.saveToken()
+        connectPresence()
     }
 
     /** Stops every listener that belongs to the signed-in user (called on logout). */
     fun stopUserListeners() {
         handler.removeCallbacks(markOffline)
+        handler.removeCallbacks(heartbeat)
         CallManager.stopListening()
         KinnectBackgroundService.stop(this)
     }
@@ -105,6 +106,7 @@ class KinnectApplication : Application(), Application.ActivityLifecycleCallbacks
 
         /** How long the app may be in the background before the user is shown as offline. */
         private const val OFFLINE_GRACE_MS = 5_000L
+        private const val HEARTBEAT_MS = 20_000L
 
         /** "Active now", "Active 5m ago", "Active yesterday", "Active 12 Oct" (or "Offline" if never seen). */
         fun presenceLabel(online: Boolean, lastSeen: Long): String = when {

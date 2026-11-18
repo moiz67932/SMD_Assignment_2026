@@ -77,6 +77,36 @@ class OfflineStore(context: Context) : SQLiteOpenHelper(context, "kinnect_offlin
             db.delete("entities", "account_id=?", arrayOf(account)); db.setTransactionSuccessful()
         } finally { db.endTransaction() }
     }
+    /** Cache a server object (not pending). Screens read these first, so they work offline. */
+    @Synchronized fun putEntity(account: String, kind: String, id: String, json: String) = putEntity(writableDatabase, account, kind, id, json, false)
+
+    /** Replace the whole cached list of one kind in one transaction (for example the feed after a refresh). Pending rows stay. */
+    @Synchronized fun replaceEntities(account: String, kind: String, items: List<Pair<String, String>>) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete("entities", "account_id=? AND kind=? AND pending=0", arrayOf(account, kind))
+            items.forEach { (id, json) ->
+                val pending = db.rawQuery("SELECT 1 FROM entities WHERE account_id=? AND kind=? AND id=? AND pending=1", arrayOf(account, kind, id)).use { it.moveToFirst() }
+                if (!pending) putEntity(db, account, kind, id, json, false)
+            }
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+    }
+
+    fun entity(account: String, kind: String, id: String): String? =
+        readableDatabase.rawQuery("SELECT json FROM entities WHERE account_id=? AND kind=? AND id=?", arrayOf(account, kind, id)).use { if (it.moveToFirst()) it.getString(0) else null }
+
+    /** Cached rows of one kind with their pending flag (pending = queued offline, not yet on the server). */
+    fun entitiesWithState(account: String, kind: String): List<Pair<String, Boolean>> =
+        readableDatabase.rawQuery("SELECT json,pending FROM entities WHERE account_id=? AND kind=? ORDER BY rowid", arrayOf(account, kind)).use { c ->
+            buildList { while (c.moveToNext()) add(c.getString(0) to (c.getInt(1) == 1)) }
+        }
+
+    @Synchronized fun deleteEntity(account: String, kind: String, id: String) {
+        writableDatabase.delete("entities", "account_id=? AND kind=? AND id=?", arrayOf(account, kind, id))
+    }
+
     private fun putEntity(db: SQLiteDatabase, account: String, kind: String, id: String, json: String, pending: Boolean) {
         db.insertWithOnConflict("entities",null,ContentValues().apply {
             put("account_id",account); put("kind",kind); put("id",id); put("json",json); put("pending",if(pending)1 else 0)

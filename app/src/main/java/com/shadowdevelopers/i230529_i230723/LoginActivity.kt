@@ -8,11 +8,10 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.google.firebase.auth.FirebaseAuth
+import com.shadowdevelopers.i230529_i230723.data.Backend
 
 /** Log in (02). Email + password sign in, Recent login card, Forgot password. */
 class LoginActivity : AppCompatActivity() {
-    private val auth by lazy { FirebaseAuth.getInstance() }
     private lateinit var emailInput: EditText
     private lateinit var passwordInput: EditText
 
@@ -66,37 +65,27 @@ class LoginActivity : AppCompatActivity() {
         Forms.hideKeyboard(this)
         val button = findViewById<View>(R.id.loginButton)
         Forms.setBusy(button, true, "Logging in…")
-        auth.signInWithEmailAndPassword(email, password).addOnCompleteListener { task ->
-            val user = auth.currentUser
-            if (!task.isSuccessful || user == null) {
+        // POST auth/login.php: the server verifies the password hash and returns a session token (stored encrypted).
+        Backend.call({ Backend.login(email, password) }) { result ->
+            result.onSuccess { user ->
+                val uid = user.getString("id")
+                val complete = user.optInt("profile_setup_complete") == 1 || user.optBoolean("profile_setup_complete")
+                Session.setProfileComplete(this, uid, complete)
+                Session.saveRecent(this, email, user.optString("display_name").ifBlank { email }, null)
+                ProfileCache.invalidate(uid)
+                (application as KinnectApplication).onSignedIn()
+                Session.startFresh(this, if (complete) HomeActivity::class.java else EditProfileActivity::class.java)
+            }.onFailure {
                 Forms.setBusy(button, false)
-                Toast.makeText(this, Forms.message(task.exception, "Login failed"), Toast.LENGTH_LONG).show()
-                return@addOnCompleteListener
+                Toast.makeText(this, Forms.message(it as? Exception, "Login failed"), Toast.LENGTH_LONG).show()
             }
-            FirebaseData.users.child(user.uid).get()
-                .addOnSuccessListener { snapshot ->
-                    val complete = snapshot.child("profileSetupComplete").getValue(Boolean::class.java) == true
-                    Session.setProfileComplete(this, user.uid, complete)
-                    Session.saveRecent(this, email, snapshot.child("name").getValue(String::class.java) ?: email, snapshot.child("photo").getValue(String::class.java))
-                    Session.startFresh(this, if (complete) HomeActivity::class.java else EditProfileActivity::class.java)
-                }
-                .addOnFailureListener {
-                    // Don't stay half signed in when the account data cannot be read.
-                    auth.signOut()
-                    Forms.setBusy(button, false)
-                    Toast.makeText(this, Forms.message(it, "Could not load your profile"), Toast.LENGTH_LONG).show()
-                }
         }
     }
 
+    /** Password reset needs an email service on the server, which this coursework backend does not run. */
     private fun resetPassword() {
-        val email = emailInput.text.toString().trim()
-        if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-            Forms.error(emailInput, "Type your account email here first")
-            return
-        }
-        auth.sendPasswordResetEmail(email)
-            .addOnSuccessListener { Toast.makeText(this, "Password reset email sent to $email", Toast.LENGTH_LONG).show() }
-            .addOnFailureListener { Toast.makeText(this, Forms.message(it, "Could not send the reset email"), Toast.LENGTH_LONG).show() }
+        androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Forgot password?")
+            .setMessage("Ask your Kinnect administrator to reset it, or create a new account. (Password reset emails are not part of this server.)")
+            .setPositiveButton("OK", null).show()
     }
 }

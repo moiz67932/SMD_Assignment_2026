@@ -92,6 +92,11 @@ object Forms {
         is FirebaseAuthInvalidCredentialsException -> "The email or password is not correct."
         is FirebaseTooManyRequestsException -> "Too many attempts. Wait a minute and try again."
         is FirebaseNetworkException -> "No internet connection. Check your connection and try again."
+        is com.shadowdevelopers.i230529_i230723.data.ApiClient.ApiException -> when (error.status) {
+            401 -> if (error.code == "invalid_credentials") "The email or password is not correct." else "Your session ended. Please log in again."
+            else -> error.message?.takeIf { it.isNotBlank() } ?: fallback
+        }
+        is java.io.IOException -> "Can't reach the Kinnect server. Check your Wi-Fi and that the backend is running."
         is DatabaseException -> if (error.message.orEmpty().contains("permission", ignoreCase = true))
             "The server refused to save this (database rules). Make sure the latest rules are published." else fallback
         null -> fallback

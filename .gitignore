@@ -38,3 +38,6 @@ backend/var/
 # Python test cache
 __pycache__/
 *.py[cod]
+
+# Kinnect API address (per machine)
+api.properties

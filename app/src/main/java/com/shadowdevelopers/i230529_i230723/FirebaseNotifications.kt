@@ -11,31 +11,42 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.google.firebase.auth.FirebaseAuth
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
 object FirebaseNotifications {
-    /** Each phone's token is stored under a short id derived from the token itself. */
-    private fun tokenId(token: String) = token.hashCode().toUInt().toString(16)
+    /** A random id for this installation; the server keeps one FCM token per (user, device). */
+    private fun deviceKey(context: android.content.Context): String {
+        val prefs = context.getSharedPreferences("kinnect_device", android.content.Context.MODE_PRIVATE)
+        prefs.getString("key", null)?.let { return it }
+        val key = java.util.UUID.randomUUID().toString()
+        prefs.edit().putString("key", key).apply()
+        return key
+    }
 
+    private lateinit var appContext: android.content.Context
+    fun init(context: android.content.Context) { appContext = context.applicationContext }
+
+    /**
+     * Sends this phone's FCM token to POST devices/register.php. The PHP backend stores it in MySQL and its push
+     * worker sends the notifications (new message, friend request, screenshot) from the server.
+     */
     fun saveToken() {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        if (Backend.uid == null) return
         FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-            FirebaseData.database.getReference("fcmTokens").child(uid).child(tokenId(token)).setValue(token)
+            val body = org.json.JSONObject().put("action_uuid", Backend.newId()).put("device_key", deviceKey(appContext)).put("fcm_token", token)
+            Backend.background { Backend.api.post("devices/register.php", body) }
         }
     }
 
-    /** Called on logout so this phone stops receiving pushes meant for the account that left. */
-    fun removeToken(onDone: () -> Unit) {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return onDone()
-        FirebaseMessaging.getInstance().token
-            .addOnSuccessListener { token ->
-                FirebaseData.database.getReference("fcmTokens").child(uid).child(tokenId(token)).removeValue()
-                    .addOnCompleteListener { onDone() }
-            }
-            .addOnFailureListener { onDone() }
+    /** Blocking (call off the main thread, before the token is cleared): stop pushes for the account that logs out. */
+    fun unregisterDevice() {
+        if (Backend.uid == null) return
+        runCatching {
+            Backend.api.post("devices/unregister.php", org.json.JSONObject().put("action_uuid", Backend.newId()).put("device_key", deviceKey(appContext)))
+        }
     }
 
     const val CHANNEL_MESSAGES = "kinnect_messages"

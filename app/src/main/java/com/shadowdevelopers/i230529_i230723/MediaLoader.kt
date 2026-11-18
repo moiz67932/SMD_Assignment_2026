@@ -4,121 +4,127 @@ import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
-import android.util.Base64
-import android.util.LruCache
 import android.widget.ImageView
 import com.bumptech.glide.Glide
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.Executors
 
 /**
- * Shows stored media. A media reference is either
- *   "db:{mediaId}"  -> the base64 text in media/{mediaId} (see MediaUploader), or
- *   anything else   -> a normal URL / content URI, loaded by Glide as before.
- * Pictures read from the database are decoded once and kept in a small memory cache.
+ * Shows stored media. A media ref is either
+ *   "srv:<media id>" -> a file on the Kinnect server: GET media/get.php?id=… with the session token (the server checks
+ *                       that this user may see it). It is downloaded ONCE into app storage, so it still shows offline.
+ *   anything else    -> a local file/content URI or URL (for example a photo still waiting to upload), given to Glide.
  */
 object MediaLoader {
-    private const val PREFIX = "db:"
+    private const val PREFIX = "srv:"
     private val main = Handler(Looper.getMainLooper())
-    private val decoder = Executors.newSingleThreadExecutor()
-    private val cache = object : LruCache<String, ByteArray>(24 * 1024 * 1024) {
-        override fun sizeOf(key: String, value: ByteArray) = value.size
-    }
+    private val downloader = Executors.newFixedThreadPool(3)
     /** Callers waiting for a download that is already running (main thread only). */
-    private val waiting = mutableMapOf<String, MutableList<(ByteArray?) -> Unit>>()
+    private val waiting = mutableMapOf<String, MutableList<(File?) -> Unit>>()
 
-    fun refFor(mediaId: String) = PREFIX + mediaId
-    fun isDb(ref: String) = ref.startsWith(PREFIX)
+    fun isServer(ref: String) = ref.startsWith(PREFIX)
     private fun idOf(ref: String) = ref.removePrefix(PREFIX)
 
-    fun load(view: ImageView, ref: String?) = show(view, ref, "data")
+    private fun folder(): File = File(appContext.filesDir, "media_cache").also { it.mkdirs() }
+    private lateinit var appContext: Context
+    fun init(context: Context) { appContext = context.applicationContext }
 
-    /** Story tile for a video: its saved first frame. */
-    fun loadVideoThumbnail(view: ImageView, ref: String?) = show(view, ref, "thumb")
+    /** The cached file for a server media id (it may not exist yet). */
+    private fun cached(id: String) = File(folder(), id.replace(Regex("[^A-Za-z0-9-]"), ""))
 
-    /** Legacy: servers that turn video URLs into pictures by changing the extension. */
-    private fun videoThumbnail(ref: String): String = ref.substringBeforeLast('.') + ".jpg"
+    /** After an upload, keep the local copy under its server id so it is not downloaded again. */
+    fun remember(file: File, mediaId: String) {
+        runCatching { file.copyTo(cached(mediaId), overwrite = true) }
+    }
 
-    private fun show(view: ImageView, ref: String?, field: String) {
-        val token = if (ref.isNullOrBlank()) null else "$ref#$field"
-        view.setTag(R.id.mediaRefTag, token) // lets a recycled row ignore an answer meant for its previous content
+    fun load(view: ImageView, ref: String?) = show(view, ref)
+
+    /** Story tile / chat bubble for a video: Glide draws a frame of the (downloaded) video file. */
+    fun loadVideoThumbnail(view: ImageView, ref: String?) = show(view, ref)
+
+    private fun show(view: ImageView, ref: String?) {
+        view.setTag(R.id.mediaRefTag, ref) // lets a recycled row ignore an answer meant for its previous content
         if (ref.isNullOrBlank()) {
             runCatching { Glide.with(view).clear(view) }
             view.setImageResource(R.drawable.media_placeholder)
             return
         }
-        if (!isDb(ref)) {
+        if (!isServer(ref)) {
             runCatching {
-                Glide.with(view).load(if (field == "thumb") videoThumbnail(ref) else ref)
-                    .placeholder(R.drawable.media_placeholder).error(R.drawable.media_error).centerCrop().into(view)
+                Glide.with(view).load(ref).placeholder(R.drawable.media_placeholder).error(R.drawable.media_error).centerCrop().into(view)
             }
             return
         }
         runCatching { Glide.with(view).clear(view) }
         view.setImageResource(R.drawable.media_placeholder)
-        fetch(ref, field) { bytes ->
-            if (view.getTag(R.id.mediaRefTag) != token) return@fetch
-            if (bytes == null) {
+        file(ref) { file ->
+            if (view.getTag(R.id.mediaRefTag) != ref) return@file
+            if (file == null) {
                 view.setImageResource(R.drawable.media_error)
-                return@fetch
+                return@file
             }
             runCatching {
-                Glide.with(view).load(bytes).placeholder(R.drawable.media_placeholder).error(R.drawable.media_error).centerCrop().into(view)
+                Glide.with(view).load(file).placeholder(R.drawable.media_placeholder).error(R.drawable.media_error).centerCrop().into(view)
             }
         }
     }
 
-    /** Gives Glide something it can load: the bytes for a database picture, otherwise the ref itself (URL / URI). */
+    /** Gives Glide something it can load: the downloaded file for server media, otherwise the ref itself. */
     fun resolveModel(ref: String, field: String = "data", onReady: (Any?) -> Unit) {
-        if (!isDb(ref)) onReady(ref) else fetch(ref, field) { onReady(it) }
+        if (!isServer(ref)) onReady(ref) else file(ref) { onReady(it) }
     }
 
-    /** A playable address for a video: a local cache file for a database video, otherwise the ref itself. */
-    fun videoUri(context: Context, ref: String, onReady: (Uri?) -> Unit) = fileUri(context, ref, ".mp4", onReady)
+    /** A playable address for a video (a local file). */
+    fun videoUri(context: Context, ref: String, onReady: (Uri?) -> Unit) = playable(ref, onReady)
 
     /** Same for audio (voice messages, story music). */
-    fun audioUri(context: Context, ref: String, onReady: (Uri?) -> Unit) = fileUri(context, ref, ".m4a", onReady)
+    fun audioUri(context: Context, ref: String, onReady: (Uri?) -> Unit) = playable(ref, onReady)
 
-    /** Database media is written once to a cache file so MediaPlayer / VideoView can play it. */
-    private fun fileUri(context: Context, ref: String, extension: String, onReady: (Uri?) -> Unit) {
-        if (!isDb(ref)) {
+    private fun playable(ref: String, onReady: (Uri?) -> Unit) {
+        if (!isServer(ref)) {
             onReady(Uri.parse(ref))
             return
         }
-        val folder = File(context.applicationContext.cacheDir, "media_files").also { it.mkdirs() }
-        val file = File(folder, idOf(ref) + extension)
-        if (file.exists() && file.length() > 0) {
-            onReady(Uri.fromFile(file))
+        file(ref) { onReady(it?.let(Uri::fromFile)) }
+    }
+
+    /** Downloads server media once (authenticated) and answers with the local file, on the main thread. */
+    private fun file(ref: String, onDone: (File?) -> Unit) {
+        val id = idOf(ref)
+        val target = cached(id)
+        if (target.exists() && target.length() > 0) {
+            onDone(target)
             return
         }
-        fetch(ref, "data", useCache = false) { bytes ->
-            if (bytes == null) {
-                onReady(null)
-                return@fetch
-            }
-            decoder.execute {
-                runCatching { file.writeBytes(bytes) }
-                main.post { onReady(if (file.exists() && file.length() > 0) Uri.fromFile(file) else null) }
-            }
+        val callbacks = waiting.getOrPut(id) { mutableListOf() }
+        callbacks.add(onDone)
+        if (callbacks.size > 1) return // the same download is already running
+        downloader.execute {
+            val result = runCatching { download(id, target) }.getOrNull()
+            main.post { waiting.remove(id)?.forEach { it(result) } }
         }
     }
 
-    /** Reads media/{id}/{field}, decodes the base64 off the main thread, and answers on the main thread. */
-    private fun fetch(ref: String, field: String, useCache: Boolean = true, onDone: (ByteArray?) -> Unit) {
-        val key = "$ref#$field"
-        if (useCache) cache.get(key)?.let { onDone(it); return }
-        val callbacks = waiting.getOrPut(key) { mutableListOf() }
-        callbacks.add(onDone)
-        if (callbacks.size > 1) return // the same download is already running
-        FirebaseData.database.getReference("media").child(idOf(ref)).child(field).get().addOnCompleteListener { task ->
-            val text = if (task.isSuccessful) task.result.getValue(String::class.java) else null
-            decoder.execute {
-                val bytes = text?.let { runCatching { Base64.decode(it, Base64.DEFAULT) }.getOrNull() }
-                main.post {
-                    if (bytes != null && useCache) cache.put(key, bytes)
-                    waiting.remove(key)?.forEach { it(bytes) }
-                }
-            }
+    private fun download(id: String, target: File): File? {
+        val connection = URL(BuildConfig.API_BASE_URL.trimEnd('/') + "/media/get.php?id=" + id).openConnection() as HttpURLConnection
+        try {
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 60_000
+            Backend.token()?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
+            if (connection.responseCode != 200) return null
+            val part = File(target.parentFile, target.name + ".part")
+            connection.inputStream.use { input -> part.outputStream().use { input.copyTo(it) } }
+            return if (part.length() > 0 && part.renameTo(target)) target else null
+        } finally {
+            connection.disconnect()
         }
+    }
+
+    /** Logout: cached media of the previous account is removed with the rest of the local cache. */
+    fun clear() {
+        runCatching { folder().deleteRecursively() }
     }
 }

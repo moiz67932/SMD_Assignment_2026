@@ -1,0 +1,4 @@
+# Copy to api.properties (git-ignored). The address of the Kinnect PHP API that both phones can reach:
+# run ./backend/run-xampp.sh on the laptop and use the address it prints (same Wi-Fi as the phones).
+# Android emulator talking to the same laptop: http://10.0.2.2:8088/
+baseUrl=http://192.168.1.10:8088/

@@ -3,7 +3,7 @@ package com.shadowdevelopers.i230529_i230723
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import com.google.firebase.auth.FirebaseAuth
+import com.shadowdevelopers.i230529_i230723.data.Backend
 
 /** Small on-device memory (SharedPreferences "kinnect") and the logout sequence. */
 object Session {
@@ -32,20 +32,18 @@ object Session {
     }
 
     /**
-     * Log out in this order: mark offline and remove this phone's FCM token while still signed in
-     * (the rules need auth for both writes), stop the global listeners, sign out, then clear the back stack.
+     * Log out (screen 19): the server invalidates the token and marks this user offline (auth/logout.php), the phone
+     * deletes the token, clears the SQLite cache and downloaded media, and the back stack is cleared.
      */
     fun logout(activity: Activity) {
         val app = activity.application as KinnectApplication
-        val finish = {
-            app.stopUserListeners()
-            FirebaseAuth.getInstance().signOut()
+        app.stopUserListeners()
+        Backend.call({
+            FirebaseNotifications.unregisterDevice()
+            Backend.logout()
+            MediaLoader.clear()
+        }) {
             startFresh(activity, LoginActivity::class.java)
         }
-        if (FirebaseAuth.getInstance().currentUser == null) {
-            finish()
-            return
-        }
-        app.setOffline { FirebaseNotifications.removeToken { finish() } }
     }
 }

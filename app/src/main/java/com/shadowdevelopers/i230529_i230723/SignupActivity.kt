@@ -14,7 +14,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import com.google.firebase.auth.FirebaseAuth
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -67,7 +67,7 @@ class SignupActivity : AppCompatActivity() {
                 return
             }
             !Patterns.EMAIL_ADDRESS.matcher(emailAddress).matches() -> return run { Forms.error(email, "Enter a valid email, like name@example.com") }
-            secret.length < 6 -> return run { Forms.error(password, "Use at least 6 characters") }
+            secret.length < 8 -> return run { Forms.error(password, "Use at least 8 characters") }
             !findViewById<CheckBox>(R.id.termsCheckbox).isChecked -> {
                 Toast.makeText(this, "Accept the terms to continue", Toast.LENGTH_SHORT).show()
                 return
@@ -81,58 +81,22 @@ class SignupActivity : AppCompatActivity() {
         }
         val button = findViewById<View>(R.id.createAccountButton)
         Forms.setBusy(button, true, "Creating account…")
-        val auth = FirebaseAuth.getInstance()
-        // If the account was already created but saving the profile failed last time, just retry the profile.
-        val existing = auth.currentUser
-        if (existing != null && existing.email.equals(emailAddress, ignoreCase = true)) {
-            saveProfile(existing.uid, first, last, emailAddress, gender, button)
-            return
-        }
-        auth.createUserWithEmailAndPassword(emailAddress, secret).addOnCompleteListener { task ->
-            val user = auth.currentUser
-            if (!task.isSuccessful || user == null) {
-                Forms.setBusy(button, false)
-                if (task.exception is com.google.firebase.auth.FirebaseAuthUserCollisionException) email.error = "Already registered"
-                Toast.makeText(this, Forms.message(task.exception, "Account creation failed"), Toast.LENGTH_LONG).show()
-                return@addOnCompleteListener
-            }
-            saveProfile(user.uid, first, last, emailAddress, gender, button)
-        }
-    }
-
-    /** users/{uid} (private details) and profiles/{uid} (public, searchable), then the profile setup step. */
-    private fun saveProfile(uid: String, first: String, last: String, emailAddress: String, gender: String, button: View) {
-        val profile = mapOf(
-            "uid" to uid,
-            "firstName" to first,
-            "lastName" to last,
-            "name" to "$first $last",
-            "email" to emailAddress,
-            "birthday" to birthday,
-            "gender" to gender,
-            "username" to "",
-            "usernameLower" to "",
-            "bio" to "",
-            "profileSetupComplete" to false,
-            "createdAt" to mapOf(".sv" to "timestamp")
-        )
-        val public = mapOf(
-            "uid" to uid, "name" to "$first $last", "nameLower" to "$first $last".lowercase(),
-            // Search also matches on first and last name separately.
-            "firstNameLower" to first.lowercase(), "lastNameLower" to last.lowercase(),
-            "username" to "", "usernameLower" to "", "bio" to "", "profileSetupComplete" to false
-        )
-        FirebaseData.users.child(uid).setValue(profile)
-            .continueWithTask { saved -> if (saved.isSuccessful) FirebaseData.profiles.child(uid).setValue(public) else saved }
-            .addOnSuccessListener {
+        // POST auth/signup.php: the server stores password_hash(password) and signs the new user in (session token).
+        Backend.call({ Backend.signup(emailAddress, secret, first, last, birthday, gender) }) { result ->
+            result.onSuccess { user ->
+                val uid = user.getString("id")
                 Session.saveRecent(this, emailAddress, "$first $last", null)
                 Session.setProfileComplete(this, uid, false)
+                (application as KinnectApplication).onSignedIn()
+                // First-time users choose a unique username and bio before Home (screen 16).
                 Session.startFresh(this, EditProfileActivity::class.java)
-            }
-            .addOnFailureListener {
+            }.onFailure {
                 Forms.setBusy(button, false)
-                Toast.makeText(this, Forms.message(it, "Could not save your profile. Try again."), Toast.LENGTH_LONG).show()
+                val error = it as? com.shadowdevelopers.i230529_i230723.data.ApiClient.ApiException
+                if (error?.code == "email_taken") email.error = "Already registered"
+                Toast.makeText(this, Forms.message(it as? Exception, "Account creation failed"), Toast.LENGTH_LONG).show()
             }
+        }
     }
 
     private fun showStrength(value: String) {

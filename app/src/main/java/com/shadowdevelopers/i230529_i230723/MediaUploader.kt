@@ -9,32 +9,29 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
-import android.util.Base64
 import androidx.exifinterface.media.ExifInterface
-import com.google.firebase.auth.FirebaseAuth
+import com.shadowdevelopers.i230529_i230723.data.ApiClient
+import com.shadowdevelopers.i230529_i230723.data.Backend
+import org.json.JSONObject
+import java.io.File
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 
 /**
- * Saves one photo or short video in the Realtime Database as base64 text, in its own node:
- *   media/{mediaId} = { type: "image" | "video", data: "<base64>", thumb: "<base64 JPEG, videos only>", owner, createdAt }
- * and gives back the reference "db:{mediaId}". Posts, stories, messages and profiles store only that short
- * reference, so their lists stay light; MediaLoader fetches the media node when a picture is actually shown.
- * No other account or service is needed. Only this file and MediaLoader know where media lives.
- *
- * Photos are shrunk (long edge 1024 px, JPEG q70 or lower) to roughly 100-300 KB. Videos are limited to
- * 3 MB (about 5-10 seconds) and audio to 2 MB, because the database is not made for large files.
+ * Uploads photos, videos and audio to the Kinnect PHP server (Assignment 3). The bytes are stored on the server's
+ * filesystem and their metadata in MySQL; posts, stories, messages and profiles keep only the short ref "srv:<media id>".
+ * Photos are shrunk first (long edge 1024 px, JPEG q70 or lower). Videos: up to 30 s / 24 MB (server limit 25 MB).
  */
 object MediaUploader {
     const val IMAGE = "image"
     const val VIDEO = "video"
-    /** Voice messages and story music (small audio clips, up to 2 MB). */
+    /** Voice messages and story music (up to 10 MB). */
     const val AUDIO = "audio"
     private const val MAX_IMAGE_EDGE = 1024
     private const val MAX_IMAGE_BYTES = 900 * 1024
-    private const val MAX_VIDEO_BYTES = 3L * 1024 * 1024
+    private const val MAX_VIDEO_BYTES = 24L * 1024 * 1024
     private const val MAX_VIDEO_MS = 31_000L
-    private const val MAX_AUDIO_BYTES = 2L * 1024 * 1024
+    private const val MAX_AUDIO_BYTES = 10L * 1024 * 1024
 
     private val worker = Executors.newFixedThreadPool(2)
     private val main = Handler(Looper.getMainLooper())
@@ -43,6 +40,12 @@ object MediaUploader {
     fun isConfigured() = true
 
     /** Encodes on a background thread; every callback is delivered on the main thread. */
+    /**
+     * Prepares the file (photos shrunk to 1024 px JPEG; videos/audio copied) in app storage, then uploads it to
+     * POST media/upload.php (multipart: id, action_uuid, file). The server stores the bytes on its filesystem and the
+     * metadata in MySQL, and returns the media id; [onSuccess] receives the ref "srv:<id>".
+     * The id and action UUID are generated once, so a retried upload is recognised by the server, not stored twice.
+     */
     fun upload(
         context: Context,
         uri: Uri,
@@ -51,38 +54,75 @@ object MediaUploader {
         onSuccess: (String) -> Unit,
         onError: (String) -> Unit
     ) {
-        val me = FirebaseAuth.getInstance().currentUser?.uid
-        if (me == null) {
+        val account = Backend.uid
+        if (account == null) {
             onError("Please log in again")
             return
         }
         val appContext = context.applicationContext
         worker.execute {
             try {
-                val node = mutableMapOf<String, Any>("type" to kind, "owner" to me, "createdAt" to mapOf(".sv" to "timestamp"))
-                if (kind == VIDEO) {
-                    checkVideo(appContext, uri)
-                    node["data"] = Base64.encodeToString(readVideo(appContext, uri), Base64.NO_WRAP)
-                    videoThumbnail(appContext, uri)?.let { node["thumb"] = it }
-                } else if (kind == AUDIO) {
-                    node["data"] = Base64.encodeToString(readAudio(appContext, uri), Base64.NO_WRAP)
-                } else {
-                    node["data"] = Base64.encodeToString(compressImage(appContext, uri), Base64.NO_WRAP)
-                }
-                val reference = FirebaseData.database.getReference("media").push()
-                val id = reference.key ?: throw IllegalStateException("Could not create an id for the upload")
-                main.post {
-                    onProgress(50)
-                    reference.setValue(node)
-                        .addOnSuccessListener { onProgress(100); onSuccess(MediaLoader.refFor(id)) }
-                        .addOnFailureListener { onError(Forms.message(it, "Upload failed. Check your connection and try again.")) }
-                }
+                val file = prepare(appContext, account, uri, kind)
+                main.post { onProgress(30) }
+                val ref = send(file, kind)
+                main.post { onProgress(100); onSuccess(ref) }
             } catch (error: OutOfMemoryError) {
                 main.post { onError("That file is too large to upload") }
             } catch (error: Exception) {
-                main.post { onError(error.message ?: "Upload failed") }
+                main.post { onError(Forms.message(error, "Upload failed. Check your connection and try again.")) }
             }
         }
+    }
+
+    /** Copies/compresses the picked media into durable app storage (survives restarts, so offline actions can upload later). */
+    fun prepare(context: Context, account: String, uri: Uri, kind: String): File {
+        val folder = File(context.filesDir, "pending_media/$account").also { it.mkdirs() }
+        val file = File(folder, Backend.newId() + extension(kind))
+        when (kind) {
+            VIDEO -> { checkVideo(context, uri); copy(context, uri, file, MAX_VIDEO_BYTES) }
+            AUDIO -> copy(context, uri, file, MAX_AUDIO_BYTES)
+            else -> file.writeBytes(compressImage(context, uri))
+        }
+        return file
+    }
+
+    /** Blocking multipart upload of a prepared file; returns "srv:<media id>". Call off the main thread. */
+    fun send(file: File, kind: String): String {
+        val id = Backend.newId()
+        val fields = JSONObject().put("id", id).put("action_uuid", Backend.newId())
+        val response = Backend.api.multipart("media/upload.php", fields, listOf(ApiClient.Upload("file", file, mime(kind))))
+        val mediaId = response.optJSONObject("media")?.optString("id")?.takeIf { it.isNotBlank() } ?: id
+        // Keep a copy under its server id so it shows instantly (and offline) without downloading it again.
+        MediaLoader.remember(file, mediaId)
+        return ProfileCache.mediaRef(mediaId)
+    }
+
+    fun mime(kind: String) = when (kind) {
+        VIDEO -> "video/mp4"
+        AUDIO -> "audio/mp4"
+        else -> "image/jpeg"
+    }
+
+    private fun extension(kind: String) = when (kind) {
+        VIDEO -> ".mp4"
+        AUDIO -> ".m4a"
+        else -> ".jpg"
+    }
+
+    private fun copy(context: Context, uri: Uri, target: File, limit: Long) {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            target.outputStream().use { output ->
+                val buffer = ByteArray(64 * 1024)
+                var total = 0L
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    total += read
+                    require(total <= limit) { "That file is too big to send (max ${limit / (1024 * 1024)} MB)" }
+                    output.write(buffer, 0, read)
+                }
+            }
+        } ?: throw IllegalArgumentException("Could not read the file")
     }
 
     /** Decodes a small enough bitmap, fixes the EXIF rotation, scales the long edge to 1024 px, then JPEG. */
@@ -123,37 +163,11 @@ object MediaUploader {
             retriever.release()
         }
         val size = fileSize(context, uri)
-        require(size <= MAX_VIDEO_BYTES) { "That video is too big to save. Choose a short clip (about 5-10 seconds, under 3 MB)." }
+        require(size <= MAX_VIDEO_BYTES) { "That video is too big to send (max 24 MB). Choose a shorter clip." }
     }
 
-    private fun readVideo(context: Context, uri: Uri): ByteArray {
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: throw IllegalArgumentException("Could not read the video")
-        require(bytes.size <= MAX_VIDEO_BYTES) { "That video is too big to save. Choose a short clip (about 5-10 seconds, under 3 MB)." }
-        return bytes
-    }
 
-    private fun readAudio(context: Context, uri: Uri): ByteArray {
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: throw IllegalArgumentException("Could not read the audio")
-        require(bytes.size <= MAX_AUDIO_BYTES) { "That audio is too big (max 2 MB). Choose a shorter clip." }
-        return bytes
-    }
 
-    /** First frame of a video as a small base64 JPEG (for the story tile on Home). */
-    private fun videoThumbnail(context: Context, uri: Uri): String? {
-        val retriever = MediaMetadataRetriever()
-        return try {
-            retriever.setDataSource(context, uri)
-            val frame = retriever.getFrameAtTime(0) ?: return null
-            val scale = 320f / maxOf(frame.width, frame.height)
-            val small = if (scale < 1f) Bitmap.createScaledBitmap(frame, (frame.width * scale).toInt(), (frame.height * scale).toInt(), true) else frame
-            val out = ByteArrayOutputStream().also { small.compress(Bitmap.CompressFormat.JPEG, 60, it) }.toByteArray()
-            Base64.encodeToString(out, Base64.NO_WRAP)
-        } catch (_: Exception) {
-            null
-        } finally {
-            retriever.release()
-        }
-    }
 
     private fun fileSize(context: Context, uri: Uri): Long {
         context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->

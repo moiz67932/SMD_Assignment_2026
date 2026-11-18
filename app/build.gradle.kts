@@ -10,6 +10,12 @@ val agoraProperties = Properties().apply {
     if (config.exists()) config.inputStream().use { load(it) }
 }
 
+// Address of the Kinnect PHP API (see api.properties.example).
+val apiProperties = Properties().apply {
+    val config = rootProject.file("api.properties")
+    if (config.exists()) config.inputStream().use { load(it) }
+}
+
 fun String.asBuildConfigString() = "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 android {
@@ -26,6 +32,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "API_BASE_URL", (apiProperties.getProperty("baseUrl") ?: "http://10.0.2.2:8088/").asBuildConfigString())
         buildConfigField("String", "AGORA_APP_ID", (agoraProperties.getProperty("appId") ?: "").asBuildConfigString())
         // Only needed when the Agora project has an App Certificate (Secured mode); calls then use a token made on the phone.
         buildConfigField("String", "AGORA_APP_CERTIFICATE", (agoraProperties.getProperty("appCertificate") ?: "").asBuildConfigString())
