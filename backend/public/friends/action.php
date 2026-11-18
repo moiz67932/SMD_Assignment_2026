@@ -16,6 +16,6 @@ mutate($u,$d,'friend.'.$op,function($pdo)use($u,$other,$op){
  $q=$pdo->prepare("SELECT id FROM friend_requests WHERE sender_id=? AND receiver_id=? AND state='pending' FOR UPDATE");$q->execute([$sender,$receiver]);$r=$q->fetch();if(!$r)throw new DomainException('Pending request unavailable');
  // History remains in action receipts; remove resolved requests so future requests are possible.
  $q=$pdo->prepare('DELETE FROM friend_requests WHERE id=?');$q->execute([$r['id']]);
- if($op==='accept'){$q=$pdo->prepare('INSERT INTO friendships(user_low,user_high,created_at) VALUES(?,?,UTC_TIMESTAMP(6))');$q->execute($pair);return ['state'=>'friends'];}
+ if($op==='accept'){$q=$pdo->prepare('INSERT INTO friendships(user_low,user_high,created_at) VALUES(?,?,UTC_TIMESTAMP(6))');$q->execute($pair);notify_user($pdo,$other,$u['id'],'friend_accepted',$u['id'],$u['display_name'].' accepted your friend request');return ['state'=>'friends'];}
  return ['state'=>'none'];
 });
