@@ -1,5 +1,18 @@
+import subprocess
 from integration import request,signup,uid,BASE
 import urllib.request, urllib.error, json, base64, subprocess
+
+def run_sql(sql):
+    """Runs SQL on the test database: XAMPP's MariaDB (backend/.env) or the old Docker fixture."""
+    import os, shutil
+    env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+    if os.path.exists('/opt/lampp/bin/mysql') and os.path.exists(env_file):
+        cfg = dict(line.strip().split('=', 1) for line in open(env_file) if '=' in line)
+        subprocess.run(['/opt/lampp/bin/mysql', '-h', cfg.get('DB_HOST', '127.0.0.1'), '-P', cfg.get('DB_PORT', '3306'), '-u' + cfg['DB_USER'],
+                        '-p' + cfg['DB_PASSWORD'], cfg.get('DB_NAME', 'kinnect'), '-e', sql], check=True, capture_output=True)
+    else:
+        subprocess.run(['docker','exec','kinnect-mysql-a3','mysql','-ukinnect','-plocalpass','kinnect','-e',sql],check=True,capture_output=True)
+
 A,B,C=signup(),signup(),signup();a=A['token'];b=B['token'];c=C['token']
 def multipart(path,fields,files,token):
  boundary='test'+uid();parts=[]
@@ -32,7 +45,7 @@ assert len(request('stories/feed.php',token=b)[1]['stories'])==1
 assert fetch(id,b)[0]==200 and fetch(id,c)[0]==404
 assert request('stories/view.php',{'id':story,'action_uuid':uid()},b)[0]==200
 sql="UPDATE stories SET expires_at=DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 1 SECOND) WHERE id='"+story+"'"
-subprocess.run(['docker','exec','kinnect-mysql-a3','mysql','-ukinnect','-plocalpass','kinnect','-e',sql],check=True,capture_output=True)
+run_sql(sql)
 assert len(request('stories/feed.php',token=b)[1]['stories'])==0
 assert fetch(id,b)[0]==404 and fetch(id,a)[0]==404
 postform={'id':uid(),'body':'multipart','action_uuid':uid()};files=[('images[]','one.png',png),('images[]','two.png',png)]
