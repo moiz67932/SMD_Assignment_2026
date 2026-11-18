@@ -7,15 +7,13 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import com.google.firebase.database.ChildEventListener
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
 
 /**
- * Call signalling through the Realtime Database (the audio/video itself goes through Agora):
- *   callRequests/{calleeUid}/{callId} = {callerId, calleeId, callerName, video, status, createdAt}
- *   status: ringing -> accepted -> ended, or declined / missed / cancelled
- * The Agora channel name is the callId, and the token is null (Agora project in testing mode).
+ * Call signalling through the PHP API (the audio/video itself goes through Agora, channel = call id):
+ *   POST calls/create.php  -> MySQL calls row (status ringing) + "incoming call" FCM push to the callee
+ *   POST calls/status.php  -> accepted / declined / cancelled / missed / ended (ended stores the duration = call log)
+ *   GET  calls/get.php     -> both phones follow the status while the call screen is open
+ *   GET  calls/incoming.php-> calls ringing for me (polled while Kinnect runs; FCM rings it when closed)
  */
 object CallManager {
     const val RINGING = "ringing"
@@ -26,35 +24,34 @@ object CallManager {
     const val ENDED = "ended"
     const val RING_TIMEOUT_MS = 30_000L
 
-    fun request(calleeUid: String, callId: String) = FirebaseData.callRequests.child(calleeUid).child(callId)
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
 
-    /** Creates the ringing request, the call log and the push for the callee in one update. */
+    /** Starts a call; [onCreated] gets the call id (also the Agora channel name). Needs the internet, like the call itself. */
     fun create(me: String, callee: String, video: Boolean, onCreated: (String) -> Unit, onError: (String) -> Unit) {
-        val callId = FirebaseData.callRequests.child(callee).push().key ?: return onError("Could not start the call")
-        ProfileCache.get(me) { profile ->
-            val now = mapOf(".sv" to "timestamp")
-            val updates = mutableMapOf<String, Any>(
-                "callRequests/$callee/$callId" to mapOf(
-                    "callerId" to me, "calleeId" to callee, "callerName" to profile.name,
-                    "video" to video, "status" to RINGING, "createdAt" to now
-                ),
-                "callLogs/$callId" to mapOf("callerId" to me, "calleeId" to callee, "type" to if (video) "video" else "voice", "status" to RINGING, "createdAt" to now)
-            )
-            updates += PushQueue.entry(callee, me, "call", profile.name, if (video) "Incoming video call" else "Incoming voice call",
-                mapOf("callId" to callId, "video" to video))
-            FirebaseData.database.reference.updateChildren(updates)
-                .addOnSuccessListener { onCreated(callId) }
-                .addOnFailureListener { onError(it.localizedMessage ?: "Could not start the call") }
+        val id = Backend.newId()
+        Backend.call({
+            Backend.api.post("calls/create.php", org.json.JSONObject().put("action_uuid", Backend.newId()).put("id", id).put("callee_id", callee).put("video", video))
+        }) { result ->
+            result.onSuccess { onCreated(id) }.onFailure { onError(Forms.message(it as? Exception, "Could not start the call")) }
         }
     }
 
+    /** Status changes are queued (pending_actions), so a hang-up while the connection drops still reaches the call log. */
     fun setStatus(calleeUid: String, callId: String, status: String, durationSeconds: Int? = null) {
-        val updates = mutableMapOf<String, Any>("callRequests/$calleeUid/$callId/status" to status, "callLogs/$callId/status" to status)
-        if (durationSeconds != null) {
-            updates["callLogs/$callId/durationSeconds"] = durationSeconds
-            updates["callLogs/$callId/endedAt"] = mapOf(".sv" to "timestamp")
+        if (callId.isBlank()) return
+        Backend.background {
+            Backend.enqueue("call_status", Backend.newId(), org.json.JSONObject().put("id", callId).put("status", status), "call.status",
+                org.json.JSONObject().put("id", callId).put("status", status))
         }
-        FirebaseData.database.reference.updateChildren(updates)
+    }
+
+    /** Polls the call's status every 1.5 s while the call screen is visible (removed with the screen's ListenerBag). */
+    fun watch(bag: ListenerBag, callId: String, onStatus: (String) -> Unit) {
+        bag.poll(1_500) {
+            Backend.call({ Backend.api.get("calls/get.php?id=$callId").getJSONObject("call").getString("status") }) { result ->
+                result.onSuccess(onStatus)
+            }
+        }
     }
 
     /** The line written into the chat when a call finishes ("Voice call · 2:31", "Missed video call"). */
@@ -67,49 +64,45 @@ object CallManager {
         }
     }
 
-    // ----- Global "someone is calling me" listener, active while a user is signed in -----
+    // ----- "Someone is calling me": checked every 3 s while a user is signed in and Kinnect runs -----
 
     private var listeningUid: String? = null
-    private var listener: ChildEventListener? = null
+    private val ringing = mutableSetOf<String>()
+    private lateinit var appContext: Context
+    private val poll = object : Runnable {
+        override fun run() {
+            val uid = listeningUid ?: return
+            if (Backend.uid != uid) return stopListening()
+            Backend.call({ Backend.api.get("calls/incoming.php").getJSONArray("calls") }) { result ->
+                result.onSuccess { list ->
+                    val now = (0 until list.length()).map { list.getJSONObject(it) }
+                    val ids = now.map { it.getString("id") }.toSet()
+                    (ringing - ids).forEach { CallNotifier.cancel(appContext, it) }
+                    ringing.retainAll(ids)
+                    now.filter { it.getString("id") !in ringing }.forEach { call ->
+                        ringing.add(call.getString("id"))
+                        CallNotifier.ring(appContext, call.getString("id"), call.getString("caller_id"), call.optString("caller_name").ifBlank { "Kinnect member" },
+                            call.optInt("video") == 1)
+                    }
+                }
+            }
+            main.postDelayed(this, 3_000)
+        }
+    }
 
     fun startListening(context: Context) {
         val uid = Backend.uid ?: return
         if (listeningUid == uid) return
         stopListening()
-        val app = context.applicationContext
-        val childListener = object : ChildEventListener {
-            override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) = handle(app, snapshot)
-            override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) = handle(app, snapshot)
-            override fun onChildRemoved(snapshot: DataSnapshot) = CallNotifier.cancel(app, snapshot.key.orEmpty())
-            override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) = Unit
-            override fun onCancelled(error: DatabaseError) = Unit
-        }
-        FirebaseData.callRequests.child(uid).addChildEventListener(childListener)
-        listener = childListener
+        appContext = context.applicationContext
         listeningUid = uid
+        main.post(poll)
     }
 
     fun stopListening() {
-        val uid = listeningUid ?: return
-        listener?.let { FirebaseData.callRequests.child(uid).removeEventListener(it) }
-        listener = null
         listeningUid = null
-    }
-
-    private fun handle(context: Context, snapshot: DataSnapshot) {
-        val callId = snapshot.key ?: return
-        val status = snapshot.child("status").getValue(String::class.java)
-        val createdAt = snapshot.child("createdAt").getValue(Long::class.java) ?: 0L
-        if (status == RINGING && FirebaseData.now() - createdAt < RING_TIMEOUT_MS) {
-            CallNotifier.ring(
-                context, callId,
-                callerId = snapshot.child("callerId").getValue(String::class.java).orEmpty(),
-                callerName = snapshot.child("callerName").getValue(String::class.java) ?: "Kinnect member",
-                video = snapshot.child("video").getValue(Boolean::class.java) == true
-            )
-        } else {
-            CallNotifier.cancel(context, callId)
-        }
+        main.removeCallbacks(poll)
+        ringing.clear()
     }
 }
 

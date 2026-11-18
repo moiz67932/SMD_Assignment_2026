@@ -11,15 +11,11 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.Query
-import com.google.firebase.database.ValueEventListener
 
 /** Your story (12): my active stories, who has seen each one ("Seen by N"), hearts for Love reactions, delete. */
 class YourStoryActivity : AppCompatActivity() {
     private val me by lazy { Backend.uid.orEmpty() }
     private val listeners = ListenerBag()
-    private var storyListeners = mutableListOf<Pair<Query, ValueEventListener>>()
     private val byAudience = mutableMapOf<String, List<Story>>()
     private var shownIds: List<String> = emptyList()
     private var viewers: List<Pair<String, Long>> = emptyList()
@@ -54,11 +50,17 @@ class YourStoryActivity : AppCompatActivity() {
         super.onStart()
         if (me.isBlank()) return
         setEmpty("Loading your story…")
-        listOf(Stories.PUBLIC, Stories.CLOSE_FRIENDS).forEach { audience ->
-            listeners.value(Stories.stories.child(me).child(audience)) { snapshot ->
-                byAudience[audience] = Stories.active(snapshot, me)
-                refresh()
-            }
+        // My active stories: SQLite first, then the server; viewers of the story on screen refresh every 10 s.
+        listeners.poll(10_000) { loadMine() }
+    }
+
+    private fun loadMine() {
+        Backend.call({ runCatching { StoryRepo.feed(true) }.getOrElse { StoryRepo.feed(false) }.filter { it.ownerId == me } }) { result ->
+            val mine = result.getOrNull() ?: return@call
+            byAudience[Stories.PUBLIC] = mine.filter { it.audience == Stories.PUBLIC }
+            byAudience[Stories.CLOSE_FRIENDS] = mine.filter { it.audience == Stories.CLOSE_FRIENDS }
+            refresh()
+            player.current()?.let(::loadViewers)
         }
     }
 
@@ -99,35 +101,28 @@ class YourStoryActivity : AppCompatActivity() {
         }
     }
 
-    private fun clearStoryListeners() {
-        storyListeners.forEach { (query, listener) -> query.removeEventListener(listener) }
-        storyListeners.clear()
-    }
+    private fun clearStoryListeners() = Unit
 
-    /** Live viewers and Love reactions for the story on screen. */
+    /** Viewers and Love reactions for the story on screen (GET stories/viewers.php). */
     private fun watch(story: Story) {
         val audience = if (story.audience == Stories.CLOSE_FRIENDS) "Close friends" else "Public"
         val music = if (story.audioTitle.isBlank()) "" else " · ♪ ${story.audioTitle}"
-        findViewById<TextView>(R.id.storyMeta).text = "${TimeFormat.ago(story.createdAt)} · $audience$music"
-        clearStoryListeners()
-        val viewsQuery = Stories.views.child(me).child(story.id)
-        val viewsListener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                viewers = snapshot.children.map { it.key.orEmpty() to (it.getValue(Long::class.java) ?: 0L) }.sortedByDescending { it.second }
-                showSeenBy()
-            }
+        findViewById<TextView>(R.id.storyMeta).text = "${TimeFormat.ago(story.createdAt)} · $audience" + (if (story.pending) " · Pending" else "") + music
+        loadViewers(story)
+    }
 
-            override fun onCancelled(error: com.google.firebase.database.DatabaseError) = Unit
+    private fun loadViewers(story: Story) {
+        if (story.pending) {
+            viewers = emptyList(); showSeenBy(); showHearts(0)
+            return
         }
-        viewsQuery.addValueEventListener(viewsListener)
-        storyListeners.add(viewsQuery to viewsListener)
-        val reactionsQuery = Stories.reactions.child(me).child(story.id)
-        val reactionsListener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) = showHearts(snapshot.children.count { it.getValue(String::class.java) == "Love" })
-            override fun onCancelled(error: com.google.firebase.database.DatabaseError) = Unit
+        Backend.call({ StoryRepo.viewers(story) }) { result ->
+            val list = result.getOrNull() ?: return@call
+            if (player.current()?.id != story.id) return@call
+            viewers = list.map { it.uid to it.time }.sortedByDescending { it.second }
+            showSeenBy()
+            showHearts(list.count { it.reaction == "Love" })
         }
-        reactionsQuery.addValueEventListener(reactionsListener)
-        storyListeners.add(reactionsQuery to reactionsListener)
     }
 
     private fun showSeenBy() {
@@ -178,17 +173,17 @@ class YourStoryActivity : AppCompatActivity() {
      * Highlight keeps this story on my profile after the 24 hours are over:
      * highlights/{me}/{storyId} is a copy without an expiry (shown in the Photos / Videos tabs of Profile).
      */
+    /** Keeps this story on my profile after 24 hours (POST highlights/add.php, queued). */
     private fun highlight() {
         val story = player.current() ?: return
-        val copy = mutableMapOf<String, Any>(
-            "mediaRef" to story.mediaRef, "type" to story.type, "label" to story.label,
-            "audience" to story.audience, "createdAt" to story.createdAt, "savedAt" to mapOf(".sv" to "timestamp")
-        )
-        if (story.loop) copy["loop"] = true
-        if (story.audioRef.isNotBlank()) { copy["audioRef"] = story.audioRef; copy["audioTitle"] = story.audioTitle }
-        FirebaseData.database.getReference("highlights").child(me).child(story.id).setValue(copy)
-            .addOnSuccessListener { Toast.makeText(this, "Added to your highlights", Toast.LENGTH_SHORT).show() }
-            .addOnFailureListener { Toast.makeText(this, Forms.message(it, "Could not save the highlight"), Toast.LENGTH_LONG).show() }
+        if (story.pending) {
+            Toast.makeText(this, "Wait until the story is shared, then highlight it", Toast.LENGTH_SHORT).show()
+            return
+        }
+        Backend.call({ Backend.enqueue("highlight", story.id, org.json.JSONObject().put("id", story.id), "highlight.add", org.json.JSONObject().put("story_id", story.id)) }) { result ->
+            result.onSuccess { Toast.makeText(this, "Added to your highlights", Toast.LENGTH_SHORT).show() }
+                .onFailure { Toast.makeText(this, Forms.message(it as? Exception, "Could not save the highlight"), Toast.LENGTH_LONG).show() }
+        }
     }
 
     /** Send: shares this story with a friend as a chat message (photo or video). */
@@ -207,11 +202,7 @@ class YourStoryActivity : AppCompatActivity() {
     private fun confirmDelete(story: Story) {
         AlertDialog.Builder(this).setMessage("Delete this story?")
             .setPositiveButton("Delete") { _, _ ->
-                FirebaseData.database.reference.updateChildren(mapOf(
-                    "stories/$me/${story.audience}/${story.id}" to null,
-                    "storyViews/$me/${story.id}" to null,
-                    "storyReactions/$me/${story.id}" to null
-                )).addOnFailureListener { Toast.makeText(this, it.localizedMessage ?: "Could not delete the story", Toast.LENGTH_LONG).show() }
+                Backend.call({ StoryRepo.delete(story) }) { loadMine() }
             }
             .setNegativeButton("Cancel", null)
             .setOnDismissListener { player.setHolding(false) }

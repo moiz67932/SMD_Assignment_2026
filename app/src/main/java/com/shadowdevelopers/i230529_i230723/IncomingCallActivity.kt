@@ -68,8 +68,7 @@ class IncomingCallActivity : AppCompatActivity() {
         super.onStart()
         if (callId.isBlank()) return
         // If the caller cancels (or another device answers), stop ringing.
-        listeners.value(CallManager.request(me, callId)) { snapshot ->
-            val status = snapshot.child("status").getValue(String::class.java)
+        CallManager.watch(listeners, callId) { status ->
             if (!answered && status != CallManager.RINGING) {
                 answered = true
                 finish()

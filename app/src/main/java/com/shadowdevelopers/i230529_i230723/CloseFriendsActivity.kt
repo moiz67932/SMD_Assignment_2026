@@ -43,16 +43,17 @@ class CloseFriendsActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         if (me.isBlank()) return
-        listeners.value(FirebaseData.friends.child(me)) { snapshot ->
-            friends.clear()
-            snapshot.children.filter { it.getValue(Boolean::class.java) == true }.mapNotNullTo(friends) { it.key }
-            friendsLoaded = true
-            render()
-        }
-        listeners.value(Stories.closeFriends.child(me)) { snapshot ->
-            chosen.clear()
-            snapshot.children.mapNotNullTo(chosen) { it.key }
-            render()
+        // My friends (only friends can be close friends) and my close-friends list (GET close-friends/list.php).
+        val friendsChanged: () -> Unit = { friends.clear(); friends.addAll(Friends.friends); friendsLoaded = true; render() }
+        Friends.observe(friendsChanged)
+        listeners.onRemove { Friends.unobserve(friendsChanged) }
+        listeners.poll(20_000) { Friends.refresh(); loadChosen(true) }
+        loadChosen(false)
+    }
+
+    private fun loadChosen(fromServer: Boolean) {
+        Backend.call({ runCatching { StoryRepo.closeFriends(fromServer) }.getOrElse { StoryRepo.closeFriends(false) } }) { result ->
+            result.onSuccess { chosen.clear(); chosen.addAll(it); render() }
         }
     }
 
@@ -72,9 +73,13 @@ class CloseFriendsActivity : AppCompatActivity() {
     }
 
     private fun toggle(uid: String) {
-        val reference = Stories.closeFriends.child(me).child(uid)
-        val task = if (uid in chosen) reference.removeValue() else reference.setValue(true)
-        task.addOnFailureListener { Toast.makeText(this, it.localizedMessage ?: "Could not update the list", Toast.LENGTH_SHORT).show() }
+        val enable = uid !in chosen
+        if (enable) chosen.add(uid) else chosen.remove(uid)
+        render()
+        // Queued (POST close-friends/set.php): works offline and syncs later.
+        Backend.call({ StoryRepo.setCloseFriend(uid, enable) }) { result ->
+            result.onFailure { Toast.makeText(this, Forms.message(it as? Exception, "Could not update the list"), Toast.LENGTH_SHORT).show(); loadChosen(false) }
+        }
     }
 
     private inner class Adapter : RecyclerView.Adapter<Adapter.Holder>() {

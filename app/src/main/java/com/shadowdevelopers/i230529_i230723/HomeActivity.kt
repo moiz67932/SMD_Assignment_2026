@@ -12,10 +12,6 @@ import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.Query
-import com.google.firebase.database.ValueEventListener
 
 /**
  * Home feed (04): posts from me and my friends, newest first.
@@ -37,13 +33,6 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var feedAdapter: PostAdapter
     private lateinit var storyAdapter: StoryRowAdapter
     /** Stories row: owner -> audience ("public"/"closeFriends") -> active stories, plus which ones I have seen. */
-    private val storyNodes = mutableMapOf<String, Pair<Query, ValueEventListener>>()
-    private val storiesByOwner = mutableMapOf<String, MutableMap<String, List<Story>>>()
-    private val seenStories = mutableSetOf<String>()
-    private val seenQueries = mutableMapOf<String, Pair<Query, ValueEventListener>>()
-    /** Friends who are live now: lives/{uid} exists while someone is broadcasting. */
-    private val liveQueries = mutableMapOf<String, Pair<Query, ValueEventListener>>()
-    private val liveNow = linkedSetOf<String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -110,10 +99,15 @@ class HomeActivity : AppCompatActivity() {
         badges.start()
         if (me.isBlank()) return
         feedAdapter.resume()
-        Stories.removeExpired(me)
         // Feed (04): SQLite first (instant, offline), then GET posts/feed.php every 15 s and after offline actions sync.
         loadFeed(fromServer = false)
-        listeners.poll(15_000) { loadFeed(fromServer = true) }
+        listeners.poll(15_000) { loadFeed(fromServer = true); loadStories(fromServer = true) }
+        // Red LIVE tiles for friends broadcasting right now (GET lives/list.php).
+        listeners.poll(15_000) {
+            Backend.call({ Backend.api.get("lives/list.php").getJSONArray("hosts").let { list -> (0 until list.length()).map { list.getString(it) } } }) { result ->
+                result.onSuccess { storyAdapter.setLive(it) }
+            }
+        }
         // Story row owners = me + my friends.
         val friendsChanged: () -> Unit = { setStoryOwners(listOf(me) + Friends.friends.take(MAX_FRIEND_AUTHORS)) }
         Friends.observe(friendsChanged)
@@ -144,11 +138,6 @@ class HomeActivity : AppCompatActivity() {
         badges.stop()
         feedAdapter.pause()
         listeners.removeAll()
-        (storyNodes.values + seenQueries.values + liveQueries.values).forEach { (query, listener) -> query.removeEventListener(listener) }
-        storyNodes.clear()
-        seenQueries.clear()
-        liveQueries.clear()
-        liveNow.clear()
         super.onStop()
     }
 
@@ -156,75 +145,26 @@ class HomeActivity : AppCompatActivity() {
      * Listens to stories/{uid}/public and stories/{uid}/closeFriends for me and each friend.
      * A close-friends node I am not allowed to read just fails quietly (onCancelled) and is skipped.
      */
+    /**
+     * Stories row: GET stories/feed.php (my stories, friends' public stories and close-friends stories I am allowed to see),
+     * shown from SQLite first; expired stories are dropped by StoryRepo. "Create story" is always the first tile.
+     */
     private fun setStoryOwners(owners: List<String>) {
-        watchLives(owners.filter { it != me })
-        storyNodes.keys.filter { it.substringBefore('/') !in owners }.forEach { key ->
-            storyNodes.remove(key)?.let { (query, listener) -> query.removeEventListener(listener) }
-            storiesByOwner.remove(key.substringBefore('/'))
-        }
-        owners.forEach { uid ->
-            listOf(Stories.PUBLIC, Stories.CLOSE_FRIENDS).forEach { audience ->
-                val key = "$uid/$audience"
-                if (key in storyNodes) return@forEach
-                val query = Stories.stories.child(uid).child(audience)
-                val listener = object : ValueEventListener {
-                    override fun onDataChange(snapshot: DataSnapshot) {
-                        val active = Stories.active(snapshot, uid)
-                        storiesByOwner.getOrPut(uid) { mutableMapOf() }[audience] = active
-                        active.forEach { watchSeen(it) }
-                        showStories()
-                    }
-
-                    override fun onCancelled(error: DatabaseError) = Unit // permission denied = not on their close friends list
-                }
-                query.addValueEventListener(listener)
-                storyNodes[key] = query to listener
-            }
-        }
-        showStories()
+        loadStories(fromServer = false)
     }
 
-    private fun watchLives(friends: List<String>) {
-        liveQueries.keys.filter { it !in friends }.forEach { uid ->
-            liveQueries.remove(uid)?.let { (query, listener) -> query.removeEventListener(listener) }
-            liveNow.remove(uid)
+    private fun loadStories(fromServer: Boolean) {
+        Backend.call({ runCatching { StoryRepo.feed(fromServer) }.getOrElse { StoryRepo.feed(false) } }) { result ->
+            val stories = result.getOrNull() ?: return@call
+            showStories(stories)
         }
-        friends.filter { it !in liveQueries }.forEach { uid ->
-            val query = FirebaseData.database.getReference("lives").child(uid)
-            val listener = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    if (snapshot.exists()) liveNow.add(uid) else liveNow.remove(uid)
-                    storyAdapter.setLive(liveNow.toList())
-                }
-
-                override fun onCancelled(error: DatabaseError) = Unit
-            }
-            query.addValueEventListener(listener)
-            liveQueries[uid] = query to listener
-        }
-    }
-
-    /** storyViews/{owner}/{storyId}/{me} exists once I have opened that story (grey ring instead of teal). */
-    private fun watchSeen(story: Story) {
-        if (story.ownerId == me || story.id in seenQueries) return
-        val query = Stories.views.child(story.ownerId).child(story.id).child(me)
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                if (snapshot.exists()) seenStories.add(story.id) else seenStories.remove(story.id)
-                showStories()
-            }
-
-            override fun onCancelled(error: DatabaseError) = Unit
-        }
-        query.addValueEventListener(listener)
-        seenQueries[story.id] = query to listener
     }
 
     /** Order: my own story, then friends with unseen stories, then the rest; newest first inside each group. */
-    private fun showStories() {
-        val owners = storiesByOwner.mapNotNull { (uid, byAudience) ->
-            val stories = byAudience.values.flatten().filter { it.expiresAt > FirebaseData.now() }.sortedBy { it.createdAt }
-            if (stories.isEmpty()) null else StoryOwner(uid, stories, stories.all { it.id in seenStories })
+    private fun showStories(all: List<Story>) {
+        val owners = all.groupBy { it.ownerId }.map { (uid, stories) ->
+            val sorted = stories.sortedBy { it.createdAt }
+            StoryOwner(uid, sorted, sorted.all { it.seen })
         }.sortedWith(compareBy<StoryOwner>({ it.uid != me }, { it.allSeen }).thenByDescending { it.latest?.createdAt ?: 0L })
         storyAdapter.setOwners(owners)
         currentStoryOwners = owners

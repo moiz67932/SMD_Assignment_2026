@@ -124,8 +124,8 @@ class VoiceCallActivity : AppCompatActivity() {
             return
         }
         // A small heart next to the name when this person is on my Close friends list.
-        Stories.closeFriends.child(me).child(peerUid).get().addOnSuccessListener {
-            if (it.exists()) findViewById<View>(R.id.callFavorite).visibility = View.VISIBLE
+        Backend.call({ StoryRepo.closeFriends(false) }) { result ->
+            if (peerUid in result.getOrDefault(emptySet())) findViewById<View>(R.id.callFavorite).visibility = View.VISIBLE
         }
         ProfileCache.get(peerUid) { profile ->
             findViewById<TextView>(R.id.callName).text = profile.name
@@ -189,10 +189,10 @@ class VoiceCallActivity : AppCompatActivity() {
         })
     }
 
-    /** Follows callRequests/{callee}/{callId}/status on both phones. */
+    /** Follows the call status (GET calls/get.php) on both phones while this screen is open. */
     private fun watchStatus() {
-        listeners.value(CallManager.request(calleeUid, callId).child("status")) { snapshot ->
-            when (snapshot.getValue(String::class.java)) {
+        CallManager.watch(listeners, callId) { status ->
+            when (status) {
                 CallManager.ACCEPTED -> if (!incoming) {
                     statusText.text = "Connecting…"
                     join()

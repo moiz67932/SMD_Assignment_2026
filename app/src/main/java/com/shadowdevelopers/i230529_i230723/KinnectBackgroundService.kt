@@ -14,10 +14,6 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
-import com.google.firebase.database.ChildEventListener
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.Query
 
 /**
  * Keeps Kinnect listening while the app is closed, so messages and calls still reach the phone WITHOUT any server.
@@ -29,9 +25,17 @@ import com.google.firebase.database.Query
  * FCM pushes from fcm-server still work and use the same notification ids, so nothing is shown twice.
  */
 class KinnectBackgroundService : Service() {
-    private var query: Query? = null
-    private var listener: ChildEventListener? = null
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var listeningUid: String? = null
+    private val poll = object : Runnable {
+        override fun run() {
+            val uid = listeningUid ?: return
+            if (Backend.uid != uid) { stopListening(); return }
+            checkNotifications(uid)
+            Backend.requestSync() // also retries offline actions while the app is closed
+            handler.postDelayed(this, POLL_MS)
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -59,47 +63,41 @@ class KinnectBackgroundService : Service() {
     }
 
     private fun stopListening() {
-        val current = query
-        val currentListener = listener
-        if (current != null && currentListener != null) current.removeEventListener(currentListener)
-        query = null
-        listener = null
+        handler.removeCallbacks(poll)
         listeningUid = null
     }
 
-    /** New rows of notifications/{me} since the last one this phone showed (a short catch-up on first run). */
+    /** Polls GET notifications/list.php (every 8 s while the service runs, so also when the app is closed). */
     private fun listenForNotifications(uid: String) {
         if (listeningUid == uid) return
         stopListening()
-        val prefs = getSharedPreferences("kinnect_push", MODE_PRIVATE)
-        val since = prefs.getLong("last_$uid", System.currentTimeMillis() - 60_000L)
-        val ref = FirebaseData.database.getReference("notifications").child(uid)
-        val newer = ref.orderByChild("createdAt").startAt((since + 1).toDouble()).limitToLast(10)
-        val childListener = object : ChildEventListener {
-            override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
-                val created = snapshot.child("createdAt").getValue(Long::class.java) ?: return
-                if (snapshot.child("read").getValue(Boolean::class.java) == true) return
-                if (created > prefs.getLong("last_$uid", 0L)) prefs.edit().putLong("last_$uid", created).apply()
-                present(applicationContext, snapshot)
-            }
-
-            override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) = Unit
-            override fun onChildRemoved(snapshot: DataSnapshot) = Unit
-            override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) = Unit
-            override fun onCancelled(error: DatabaseError) = Unit
-        }
-        newer.addChildEventListener(childListener)
-        query = newer
-        listener = childListener
         listeningUid = uid
+        handler.post(poll)
+    }
+
+    /** Shows every unread notification newer than the last one this phone showed (catch-up after being offline). */
+    private fun checkNotifications(uid: String) {
+        val prefs = getSharedPreferences("kinnect_push", MODE_PRIVATE)
+        Backend.call({ Backend.api.get("notifications/list.php").getJSONArray("notifications") }) { result ->
+            val list = result.getOrNull() ?: return@call
+            val since = prefs.getLong("last_$uid", System.currentTimeMillis() - 60_000L)
+            var newest = since
+            (0 until list.length()).map { list.getJSONObject(it) }.sortedBy { TimeFormat.parse(it.optString("created_at")) }.forEach { row ->
+                val created = TimeFormat.parse(row.optString("created_at"))
+                if (created <= since || !(row.isNull("read_at") || row.optString("read_at").isBlank())) return@forEach
+                newest = maxOf(newest, created)
+                present(applicationContext, row)
+            }
+            if (newest > since) prefs.edit().putLong("last_$uid", newest).apply()
+        }
     }
 
     /** Turns one notifications row into a system notification (unless the user is looking at it already). */
-    private fun present(context: Context, row: DataSnapshot) {
-        val type = row.child("type").getValue(String::class.java).orEmpty()
-        val sender = row.child("senderId").getValue(String::class.java).orEmpty()
-        val chatId = row.child("chatId").getValue(String::class.java)
-        val body = row.child("body").getValue(String::class.java).orEmpty()
+    private fun present(context: Context, row: org.json.JSONObject) {
+        val type = when (row.optString("type")) { "friend_request" -> "friendRequest"; "friend_accepted" -> "friendAccepted"; else -> row.optString("type") }
+        val sender = row.optString("actor_id")
+        val chatId: String? = null
+        val body = row.optString("body")
         if (sender.isBlank() || type == "call") return // calls ring through CallManager instead
         // Always post a system dropdown notification; the in-app list and badge update independently.
         ProfileCache.get(sender) { profile ->
@@ -107,8 +105,8 @@ class KinnectBackgroundService : Service() {
             when (type) {
                 "message" -> FirebaseNotifications.show(context, name, body.ifBlank { "Sent you a message" }, chatId, sender)
                 "screenshot" -> FirebaseNotifications.show(context, name, "took a screenshot of your chat", chatId, sender)
-                "activity" -> FirebaseNotifications.showActivity(context, name, body.ifBlank { "New activity on Kinnect" }, row.key.orEmpty())
-                else -> FirebaseNotifications.showActivity(context, name, describe(type, body), row.key.orEmpty())
+                "activity" -> FirebaseNotifications.showActivity(context, name, body.ifBlank { "New activity on Kinnect" }, row.optString("id"))
+                else -> FirebaseNotifications.showActivity(context, name, describe(type, body), row.optString("id"))
             }
         }
     }
@@ -126,6 +124,7 @@ class KinnectBackgroundService : Service() {
 
     companion object {
         private const val FOREGROUND_ID = 4021
+        private const val POLL_MS = 8_000L
         private const val CHANNEL_SERVICE = "kinnect_service"
 
         /** Starts (or keeps) the background listener. Call only while the user is signed in and Kinnect is on screen. */

@@ -67,17 +67,11 @@ class StoryViewerActivity : AppCompatActivity() {
             findViewById<TextView>(R.id.storyAuthor).text = profile.name
             AvatarBinder.bind(findViewById(R.id.storyAvatar), profile.name, profile.photo)
         }
-        val collected = mutableListOf<Story>()
-        var pending = 2
-        listOf(Stories.PUBLIC, Stories.CLOSE_FRIENDS).forEach { audience ->
-            Stories.stories.child(owner).child(audience).get().addOnCompleteListener { task ->
-                if (task.isSuccessful) collected.addAll(Stories.active(task.result, owner))
-                pending--
-                if (pending == 0) {
-                    if (isFinishing || isDestroyed) return@addOnCompleteListener
-                    if (collected.isEmpty()) openOwner(position + 1) else player.play(collected.sortedBy { it.createdAt })
-                }
-            }
+        // This person's live stories (server visibility rules already applied), from SQLite when offline.
+        Backend.call({ runCatching { StoryRepo.feed(true) }.getOrElse { StoryRepo.feed(false) }.filter { it.ownerId == owner } }) { result ->
+            if (isFinishing || isDestroyed) return@call
+            val collected = result.getOrDefault(emptyList())
+            if (collected.isEmpty()) openOwner(position + 1) else player.play(collected.sortedBy { it.createdAt })
         }
     }
 
@@ -85,9 +79,8 @@ class StoryViewerActivity : AppCompatActivity() {
         val audience = if (story.audience == Stories.CLOSE_FRIENDS) "Close friends" else "Public"
         val music = if (story.audioTitle.isBlank()) "" else " · ♪ ${story.audioTitle}"
         findViewById<TextView>(R.id.storyMeta).text = "${TimeFormat.ago(story.createdAt)} · $audience$music"
-        if (story.ownerId != me) {
-            Stories.views.child(story.ownerId).child(story.id).child(me).setValue(mapOf(".sv" to "timestamp"))
-        }
+        // POST stories/view.php (queued): the owner sees me in "Viewers" and my ring turns grey.
+        if (story.ownerId != me) Backend.background { StoryRepo.markViewed(story) }
     }
 
     private fun sendReply() {
@@ -103,7 +96,7 @@ class StoryViewerActivity : AppCompatActivity() {
     /** Quick reaction: stored on the story (for the hearts in Your story) and sent to the owner as a message. */
     private fun react(type: String) {
         val story = player.current() ?: return
-        Stories.reactions.child(story.ownerId).child(story.id).child(me).setValue(type)
+        Backend.background { StoryRepo.react(story, type) }
         val emoji = when (type) { "Love" -> "❤️"; "Laugh" -> "😆"; else -> "👍" }
         ChatSender.send(this, me, story.ownerId, type = "text", text = "Reacted $emoji to your story", preview = "Reacted $emoji to your story",
             onSent = { Toast.makeText(this, "Sent $emoji", Toast.LENGTH_SHORT).show() })

@@ -98,12 +98,13 @@ class StoryEditorActivity : AppCompatActivity() {
         findViewById<View>(R.id.shareStoryButton).setBackgroundResource(if (value == Stories.PUBLIC) R.drawable.rounded_teal else R.drawable.rounded_dark)
         findViewById<View>(R.id.shareCloseFriendsButton).setBackgroundResource(if (value == Stories.CLOSE_FRIENDS) R.drawable.rounded_teal else R.drawable.rounded_dark)
         if (value == Stories.CLOSE_FRIENDS) {
-            Stories.closeFriends.child(me).get().addOnSuccessListener { snapshot ->
-                if (!snapshot.hasChildren()) {
+            Backend.call({ runCatching { StoryRepo.closeFriends(true) }.getOrElse { StoryRepo.closeFriends(false) } }) { result ->
+                val count = result.getOrDefault(emptySet()).size
+                if (count == 0) {
                     Toast.makeText(this, "Your close friends list is empty, add people first", Toast.LENGTH_LONG).show()
                     openCloseFriends()
                 } else {
-                    Toast.makeText(this, "Sharing with ${snapshot.childrenCount} close friends. Tap again to edit the list.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Sharing with $count close friends. Tap again to edit the list.", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -113,11 +114,11 @@ class StoryEditorActivity : AppCompatActivity() {
 
     /** Tag: choose friends; their names are added to the label and they are notified when the story is shared. */
     private fun chooseTags() {
-        FirebaseData.friends.child(me).get().addOnSuccessListener { snapshot ->
-            val friends = snapshot.children.filter { it.getValue(Boolean::class.java) == true }.mapNotNull { it.key }
+        run {
+            val friends = Friends.friends.toList()
             if (friends.isEmpty()) {
                 Toast.makeText(this, "Add friends first to tag them", Toast.LENGTH_SHORT).show()
-                return@addOnSuccessListener
+                return@run
             }
             val names = arrayOfNulls<String>(friends.size)
             var left = friends.size
@@ -128,7 +129,7 @@ class StoryEditorActivity : AppCompatActivity() {
                     if (left == 0 && !isFinishing) showTagDialog(friends, names.map { it.orEmpty() })
                 }
             }
-        }.addOnFailureListener { Toast.makeText(this, Forms.message(it, "Could not load your friends"), Toast.LENGTH_LONG).show() }
+        }
     }
 
     private fun showTagDialog(friends: List<String>, names: List<String>) {
@@ -221,70 +222,24 @@ class StoryEditorActivity : AppCompatActivity() {
         } else uploadAudioThen(source)
     }
 
+    /**
+     * Saves the story on the phone and queues it: photo/video (and music) upload to the server, then stories/create.php
+     * with the audience (Your story or Close friends). It appears in Your story at once; offline it syncs later.
+     */
     private fun uploadAudioThen(picture: Uri) {
-        val status = findViewById<TextView>(R.id.storyUploadStatus)
-        val music = audioUri
-        if (music == null) {
-            uploadMedia(picture, "")
-            return
-        }
-        MediaUploader.upload(this, music, MediaUploader.AUDIO,
-            onProgress = { status.text = "Saving music $it%" },
-            onSuccess = { audioRef -> uploadMedia(picture, audioRef) },
-            onError = { message -> setSharing(false); Toast.makeText(this, message, Toast.LENGTH_LONG).show() })
-    }
-
-    private fun uploadMedia(picture: Uri, audioRef: String) {
-        val status = findViewById<TextView>(R.id.storyUploadStatus)
-        MediaUploader.upload(this, picture, mediaType,
-            onProgress = { status.text = "Uploading $it%" },
-            onSuccess = { ref -> writeStory(ref, audioRef) },
-            onError = { message ->
-                setSharing(false)
-                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-            })
-    }
-
-    private fun writeStory(mediaRef: String, audioRef: String) {
-        val node = Stories.stories.child(me).child(audience)
-        val storyId = node.push().key ?: return setSharing(false)
-        val story = mutableMapOf<String, Any>(
-            "mediaRef" to mediaRef,
-            "type" to mediaType,
-            "label" to label.text.toString().trim().take(80),
-            "audience" to audience,
-            "createdAt" to mapOf(".sv" to "timestamp"),
-            "expiresAt" to FirebaseData.now() + Stories.LIFETIME_MS
-        )
-        if (boomerang) story["loop"] = true
-        if (audioRef.isNotBlank()) {
-            story["audioRef"] = audioRef
-            story["audioTitle"] = audioTitle
-        }
-        if (tagged.isNotEmpty()) story["tags"] = tagged.toList()
-        node.child(storyId).setValue(story)
-            .addOnSuccessListener {
-                notifyTagged()
-                Toast.makeText(this, if (audience == Stories.PUBLIC) "Shared to your story" else "Shared to Close friends", Toast.LENGTH_SHORT).show()
+        val tags = tagged.toList()
+        Backend.call({ StoryRepo.create(this, picture, mediaType, label.text.toString().trim().take(80), audience, boomerang, audioUri, audioTitle, tags) }) { result ->
+            result.onSuccess {
+                val where = if (audience == Stories.PUBLIC) "your story" else "Close friends"
+                Toast.makeText(this, if (Backend.online()) "Shared to $where" else "Saved. It will be shared to $where when you're online.", Toast.LENGTH_SHORT).show()
                 // Back to Home (clears Camera and this editor from the back stack).
                 startActivity(Intent(this, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
                 finish()
-            }
-            .addOnFailureListener {
+            }.onFailure {
                 setSharing(false)
-                Toast.makeText(this, it.localizedMessage ?: "Could not share the story", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, Forms.message(it as? Exception, "Could not share the story"), Toast.LENGTH_LONG).show()
             }
-    }
-
-    /** Tagged friends get a notification. */
-    private fun notifyTagged() {
-        if (tagged.isEmpty()) return
-        val updates = mutableMapOf<String, Any>()
-        tagged.forEach { friend ->
-            val id = FirebaseData.database.getReference("notifications").child(friend).push().key ?: return@forEach
-            updates["notifications/$friend/$id"] = mapOf("senderId" to me, "type" to "tag", "body" to "tagged you in a story", "createdAt" to mapOf(".sv" to "timestamp"), "read" to false)
         }
-        FirebaseData.database.reference.updateChildren(updates)
     }
 
     private fun setSharing(active: Boolean) {
