@@ -1,97 +1,83 @@
-# Kinnect (i230529_i230723)
+# Kinnect (i230529_i230723), Assignment 3
 
-CS 4039 Software for Mobile Devices, Assignment 2: "Kinnect Backend with Firebase".
-Kotlin, one Activity per screen, Firebase Authentication + Realtime Database + Cloud Messaging, Agora for calls,
-photos and short videos are stored inside the Realtime Database as base64 (no extra account needed).
+CS 4039 Software for Mobile Devices, Assignment 3: "Kinnect with web services & SQLite".
+Kotlin Android app (one Activity per screen) on its own **PHP + MySQL web services**, with an **SQLite** cache and an
+offline action queue. Firebase is used **only for push notifications (FCM)**; calls use **Agora**.
 
-- Project name: `i230529_i230723`
-- Package / applicationId: `com.shadowdevelopers.i230529_i230723`
-- Submission ZIP: `i230529_i230723_Assignment02` (Android Studio > File > Export > Export to ZIP File)
+- Project name: `i230529_i230723` · package `com.shadowdevelopers.i230529_i230723`
+- Submission ZIP: `i230529_i230723_Assignment03` (Android Studio > File > Export > Export to ZIP File)
 
-## Setup
-
-Nothing secret is in this repository. Each of these files is git-ignored and must be created on your machine. Photos need no setup: they are saved in the database itself.
-
-| File | Where it comes from |
-|---|---|
-| `app/google-services.json` | Firebase console > Project settings > Your apps > Android app with package **com.shadowdevelopers.i230529_i230723** > download |
-| `agora.properties` (repo root) | copy `agora.properties.example`; `appId=` and, if the Agora project has a Primary Certificate (Secured mode), `appCertificate=`; the app then builds a call token itself. A Testing-mode project needs no certificate |
-| `fcm-server/serviceAccountKey.json` and `fcm-server/.env` | see `fcm-server/README.md` |
-
-Firebase console, once:
-1. Authentication > Sign-in method > enable **Email/Password**.
-2. Realtime Database > create the database, then deploy the rules from this repo:
-   `npm install -g firebase-tools && firebase login && firebase use --add && firebase deploy --only database`
-   (or paste `database.rules.json` into Realtime Database > Rules > Publish).
-3. Cloud Messaging works with the default project settings; pushes are sent by `fcm-server` (below).
-
-Build: open the folder in Android Studio, or run `./gradlew :app:assembleDebug` (needs `app/google-services.json`).
-
-## Push notifications (run during the demo)
+## Architecture
 
 ```
-cd fcm-server
-cp .env.example .env   # set DATABASE_URL
-npm install
-npm start
+Screens (Activities) ──> Repositories (PostRepo, ChatRepo, StoryRepo, Friends, Inbox, ProfileCache)
+        ▲                     │ read: SQLite first, then the server        │ write: SQLite + pending_actions (one transaction)
+        │                     ▼                                             ▼
+        └──────────── SQLite (OfflineStore: entities + pending_actions) <── SyncJobService (drains the queue in order)
+                                                                             │ HTTPS/HTTP + Bearer token, action UUID
+                                                                             ▼
+                                         PHP web services (backend/public/*.php) ──> MySQL (MariaDB in XAMPP)
+                                                     │                          └──> media files on the server filesystem
+                                                     └── push_jobs ──> bin/push-worker.php ──> FCM ──> phones
 ```
-The app writes small requests to `pushQueue/`; this script delivers them with FCM (new messages, screenshot alerts,
-incoming calls). Without it, everything else works but no push arrives.
 
-## Espresso tests
+- **Auth**: `auth/signup.php`, `auth/login.php`, `auth/logout.php`. Passwords are stored with `password_hash`. Login
+  returns a random session token (only its SHA-256 is stored in MySQL); the phone keeps it encrypted with an
+  Android Keystore AES-GCM key (`data/SecureSession.kt`) and sends `Authorization: Bearer <token>` on every request.
+- **Offline**: every write (message, post, reaction, comment, friend request, edit/delete, story, ...) is saved locally
+  and added to `pending_actions` in **one SQLite transaction**, shown at once with a **Pending** label, and sent in order
+  by `SyncJobService` (persisted JobScheduler job, also run immediately when online and when the network returns).
+  Each action carries a **client UUID**; the server's `processed_actions` table makes a retried action return its
+  first result instead of running twice (**no duplicates, no data loss**).
+- **Live updates**: open screens poll their endpoint (chat every 3 s, chats 4 s, notifications 8 s, feed 15 s) and
+  refresh as soon as queued actions reach the server. Presence = heartbeat every 20 s (online until 45 s after the last).
+- **Media**: `media/upload.php` (multipart) stores files outside the web root; `media/get.php` serves them only to
+  users allowed to see them. The phone keeps a copy so cached content shows offline.
 
-Two backend-connected tests in `app/src/androidTest/.../BackendWorkflowTest.kt`:
-1. `loginThenCreatedPostAppearsInHomeFeed`
-2. `sendingChatMessageShowsInConversationAndChatsList`
+## Run it (laptop = server, two phones on the same Wi-Fi)
 
-Seed one account (finished Edit profile) and make it friends with a second account. Then, with a phone or emulator connected:
-```
-./gradlew connectedDebugAndroidTest \
-  -Pandroid.testInstrumentationRunnerArguments.testEmail=you@example.com \
-  -Pandroid.testInstrumentationRunnerArguments.testPassword=yourPassword \
-  "-Pandroid.testInstrumentationRunnerArguments.friendName=Friend Display Name"
-```
-Never commit real credentials.
+1. **Database (XAMPP)**: `sudo /opt/lampp/lampp startmysql` (once per boot).
+2. **First time only**: `./backend/run-xampp.sh setup` creates the `kinnect` database, a private DB user (random password
+   in `backend/.env`, git-ignored) and runs all migrations in `backend/migrations`.
+3. **API server**: `./backend/run-xampp.sh` prints `Kinnect API: http://<laptop-ip>:8088`. Open the firewall once:
+   `sudo firewall-cmd --add-port=8088/tcp --permanent && sudo firewall-cmd --reload`.
+4. **Push worker** (FCM from PHP): put the Firebase service-account key at `backend/var/service-account.json`
+   (git-ignored) and run `./backend/run-xampp.sh push` in a second terminal.
+5. **App config** (all git-ignored, copy the `.example` files):
+   - `api.properties`: `baseUrl=http://<laptop-ip>:8088/` (the address printed in step 3)
+   - `agora.properties`: `appId=` and `appCertificate=` of the Agora project (tokens are built on the phone)
+   - `app/google-services.json`: Firebase project file (used only for FCM)
+6. Build and install the debug build on both phones from Android Studio. (Only the debug build allows plain HTTP to
+   the laptop; release builds are HTTPS-only.)
 
-## Features
+Never commit `backend/.env`, `backend/var/`, `api.properties`, `agora.properties`, `google-services.json` or the
+service-account key.
 
-Status uses one vocabulary: **compiles** means the code builds; **needs device test** means it has not been run on phones yet.
-Every feature below compiles and still needs a device test.
+## Tests
 
-| Feature (brief section) | Screens |
-|---|---|
-| Splash 5 s, auto routing | 01 |
-| Sign up (live password strength), log in, recent login, forgot password, log out | 02, 03, 19 |
-| First-time profile setup (unique username + bio) | 16 |
-| Profile picture, cover, name, username, bio | 15, 16, 17 |
-| Friend requests: send / confirm / delete / unfriend, Add friend → Requested → Friends, counts, mutual friends, suggestions | 13, 14, 17, 18 |
-| Posts with text and photos, multi-image grid with "+N" | 04, 07, 08 |
-| Six reactions, one per user, live summary | 04, 05, 06 |
-| Comments with replies, likes and photos | 06 |
-| Feed: me + friends, newest first | 04 |
-| Stories: photo/video, label, Your story / Close friends, 24 h expiry, viewer, Your story with viewers | 04, 09, 10, 11, 12 |
-| Chats list with last message, time, unread, online friends | 20 |
-| Chat: text, photos, shared posts, edit/delete within 5 minutes, "Edited", replies, hearts, typing, seen | 21 |
-| Voice and video calls (Agora), incoming call screen, call history in chat | 21, 22, new |
-| Push notifications for new messages (FCM via fcm-server) | (system) |
-| Search by username or name as you type | 13 |
-| Online / offline, "Active now", "Active 5m ago" | 20, 21 |
-| Screenshot alert (system message + notification) | 21 |
-| Live video (host + viewers, LIVE tile on Home), Notes, Groups with chat, Saved, Events, Memories, Highlights | new |
-| Voice and video messages, emoji picker, story music / filters / tags / stickers, post feelings / check-in / tags / events | 07, 09, 10, 21 |
-| Two Espresso tests | (tests) |
+- Backend (against the running API): `python3 backend/tests/<name>.py` for `integration`, `social`, `feed`, `comments`,
+  `delivery`, `device_notifications`, `expiry`, `media_stories`, `extended_media`.
+- Espresso (two critical workflows, `app/src/androidTest/.../BackendWorkflowTest.kt`): seed one account with a finished
+  profile and one friend, then
+  ```
+  ./gradlew connectedDebugAndroidTest \
+    -Pandroid.testInstrumentationRunnerArguments.testEmail=you@example.com \
+    -Pandroid.testInstrumentationRunnerArguments.testPassword=yourPassword \
+    "-Pandroid.testInstrumentationRunnerArguments.friendName=Friend Display Name"
+  ```
+  `OfflineQueueTest` checks queue persistence, order, retry and account separation on the device.
 
-More detail: `docs/CODE_GUIDE.md` (how each feature works and viva questions), `docs/DEMO_SCRIPT.md`,
-`docs/TEST_MATRIX.md`, `docs/UI_CHECKLIST.md`.
+## Live demo checklist (two phones)
 
-## Known limitations
+1. Laptop: MySQL running, `./backend/run-xampp.sh` and `./backend/run-xampp.sh push` running; both phones on the same Wi-Fi.
+2. Splash (5 s) → Home without logging in again (stored token). Log out on one phone → Log in → Recent login card.
+3. Phone A posts photos (grid with "+N"), phone B reacts and comments; A gets the notification.
+4. Chat: send text, photo, video, voice and a file; edit and delete within 5 minutes ("Edited"); B sees it live.
+5. Presence: green dot / "Active now"; close the app on A and B shows "Active … ago".
+6. Screenshot in a chat → system message "… took a screenshot" + notification on the other phone.
+7. Voice and video call from the chat icons; the call summary appears in the chat (call log stored on the server).
+8. **Offline**: turn Wi-Fi off on A ("You're offline" appears). Send messages, react, comment, post, send a friend request:
+   each shows **Pending**. Kill and reopen the app (still there, Splash goes to Home). Turn Wi-Fi on
+   ("Back online · syncing N pending changes"): everything appears **once** on phone B.
 
-- The Camera screen is a live CameraX viewfinder (photo, hold for video, flash, front/back, timer, grid, filters, TEXT / LIVE / BOOMERANG). Videos are kept short (about 8 s) because they are stored in the database.
-- Calls have no foreground service: audio may stop if the app stays in the background for a long time during a call.
-  On Android 14+ the full-screen ringing screen needs the "full-screen notifications" permission; otherwise a heads-up notification is shown.
-- Screenshot detection is reliable on Android 14+ (system API). On older versions it is best effort (it watches new images named "screenshot") and needs gallery permission.
-- Messages, calls and other alerts reach the phone while the app is closed through a small foreground service (a quiet "Kinnect is running" notification), with no server. On phones that kill background apps (vivo, Xiaomi, Oppo) allow Kinnect to run in the background / auto-start and set battery to "Unrestricted". `fcm-server` is optional: it adds FCM pushes that also wake the app after a reboot or after the system stops it.
-- Posts are readable by every signed-in user at the database level (the feed shows only friends); see `docs/CODE_GUIDE.md`.
-- Photos, videos and voice messages live in the Realtime Database as base64 (`media/{id}`), so clips are limited (video 3 MB, audio 2 MB). A production app would use object storage.
-- Live video uses Agora in broadcast mode (same App ID as calls, Testing mode). It was not load-tested.
-- Groups are text chats; group voice/video calls are not included.
+More detail: `docs/CODE_GUIDE.md` (how each feature works, viva notes) and `docs/ASSIGNMENT_03_PROGRESS.md`.

@@ -150,3 +150,31 @@ decides what to show (me + friends) on the client. Making posts friends-only wou
 - **Opened from a notification while the app was closed:** the screen is the first of its task, so Back opens Home instead of leaving the app (`Nav.installBackToHome`, installed for every screen by `KinnectApplication`).
 - Viva: "Why not `REORDER_TO_FRONT`?" It moves an old instance forward but keeps every screen visited in the history, so Back walks through all of them.
 
+
+## Assignment 3: web services, SQLite and offline sync
+
+| Piece | File(s) | What it does |
+|---|---|---|
+| API client | `data/ApiClient.kt` | JSON + multipart over `HttpURLConnection`, `Authorization: Bearer <token>`, server errors become `ApiException(status, code)` |
+| Session | `data/SecureSession.kt` | token encrypted with an Android Keystore AES-GCM key; expiry stored; cleared on logout |
+| Local DB | `data/OfflineStore.kt` | SQLite `entities` (cached server objects + optimistic local ones) and `pending_actions` (sequence, UUID, operation, payload, state, attempts, lease) |
+| Sync | `data/SyncJobService.kt` | one drainer per process; oldest action first; network errors/5xx retry later (order kept); permanent 4xx (e.g. edit after 5 min) is dropped and the user is told |
+| Entry point | `data/Backend.kt` | `call {}` runs network/SQLite work off the main thread; `enqueue()` = local save + queue in one transaction; `requestSync()` |
+| Repositories | `PostRepo`, `ChatRepo`, `StoryRepo`, `Friends` (FriendState.kt), `Inbox`, `ProfileCache` | each screen's reads (SQLite first, then server) and writes (queued) |
+| Live refresh | `ListenerBag.poll()` | polls while a screen is visible and again when queued actions are confirmed |
+| Push | `backend/src/notifications.php`, `backend/bin/push-worker.php`, `FirebaseNotifications.kt` | server writes a notification + one push job per device in the same transaction; the worker sends FCM HTTP v1 data messages; the app also polls so nothing is missed |
+
+Viva notes:
+- *Why a client UUID?* The phone may send the same action twice (timeout after the server committed). The server
+  records `(user, action_uuid)` with a hash of the request in `processed_actions` inside the same transaction; a
+  repeat returns the stored response, a different payload with the same UUID is rejected (409).
+- *Why one SQLite transaction for entity + action?* So the UI never shows something that is not queued, and a queued
+  action always has its local copy (no half state after a crash).
+- *What if an older action is confirmed while a newer edit is pending?* `acknowledge()` does not overwrite the local copy
+  when another action for the same entity is still queued.
+- *5-minute rule?* Checked by the server clock in SQL (`UTC_TIMESTAMP(6) < DATE_ADD(created_at, INTERVAL 5 MINUTE)`);
+  the app only hides the menu option after 5 minutes.
+- *Story expiry?* `expires_at = created_at + 24 h`; feed and media endpoints ignore expired stories; `StoryRepo` also
+  deletes expired ones from the SQLite cache on every read.
+- *Who can see what?* Every endpoint checks the token's user: posts/stories need friendship (or close-friends
+  membership), chats/messages/media need chat membership, groups need membership.

@@ -54,3 +54,20 @@ Queue instrumentation attempt: FAILED at device discovery/property retrieval (AD
 Added Android multipart streaming and persistent attachment staging with account/path validation. Queue payloads may contain `local_files` objects (`field`, `path`, `mime`); the drainer strips local metadata and streams the files. A media upload can precede a story/message using its stable client media UUID. Screen-level enqueue integration and automatic construction of these dependent actions are still unfinished. Kotlin compilation passes.
 
 Added SQL profile photo/cover updates, image comments and owner-only comment deletion, story reactions/viewers/deletion, close-friend listing, device unregister, notification reads, and friend-request notification creation in the mutation transaction. `extended_media.py` passed ownership checks, image comment creation/deletion, and story viewer/reaction/deletion authorization. These changes do not remove the existing Android Firebase callers. Remaining items 1 and 5 of the user's requested fixes are not complete.
+
+## Android migration and XAMPP (19 November 2026)
+
+- Backend runs on XAMPP (PHP 8.2.12, MariaDB 10.4.32): migrations made MariaDB-compatible (explicit `utf8mb4_unicode_ci`),
+  `backend/run-xampp.sh` sets up the database, serves the API on the Wi-Fi address and runs the push worker.
+- All Android screens now use the PHP API with the SQLite cache and the pending_actions queue; Firebase Auth and the
+  Realtime Database dependencies are removed from the build (only Firebase Messaging remains).
+- New endpoints: profile details, presence leave/many, friend-accepted/reaction/comment notifications, richer feed
+  (author, reactions, my reaction, comment count, details), post get/reactions/delete, chat list/read/typing/hearts,
+  message extras (reply quote, shared post, call summary, files) and peer-only first message, story extras and
+  viewer reactions, call logs (create/status/get/incoming/list), notes, live, groups, marketplace, highlights,
+  change password, notification delete.
+- Executed: all nine original backend suites PASS on XAMPP; additional end-to-end request suites for login/profile
+  (16 checks), friends/search/notifications (23), posts (16), messaging (24) and stories/calls/extras (27) PASS.
+  `:app:compileDebugKotlin`, `:app:compileDebugAndroidTestKotlin` and `:app:processDebugResources` pass.
+- NOT verified: behaviour on physical devices (no device run), FCM delivery (no service-account key on this laptop),
+  Agora calls end to end, Espresso execution.
