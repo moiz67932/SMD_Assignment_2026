@@ -8,6 +8,8 @@ import android.os.Looper
 
 class KinnectApplication : Application(), Application.ActivityLifecycleCallbacks {
     private var startedActivities = 0
+    /** Set when the connection drops, so "Back online" is only shown after being offline. */
+    @Volatile private var wasOffline = false
     private val handler = Handler(Looper.getMainLooper())
 
     override fun onCreate() {
@@ -16,6 +18,32 @@ class KinnectApplication : Application(), Application.ActivityLifecycleCallbacks
         MediaLoader.init(this)
         FirebaseNotifications.init(this)
         registerActivityLifecycleCallbacks(this)
+        // Offline queue: the moment the phone is back online, send everything that waited (in order, no duplicates).
+        runCatching {
+            val connectivity = getSystemService(android.net.ConnectivityManager::class.java)
+            connectivity.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    val backend = com.shadowdevelopers.i230529_i230723.data.Backend
+                    val account = backend.uid ?: return
+                    backend.requestSync()
+                    if (!wasOffline) return
+                    wasOffline = false
+                    backend.call({ backend.store.pendingCount(account) }) { result ->
+                        val count = result.getOrDefault(0)
+                        if (inForeground) android.widget.Toast.makeText(this@KinnectApplication,
+                            if (count > 0) "Back online · syncing $count pending change${if (count == 1) "" else "s"}" else "Back online", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                override fun onLost(network: android.net.Network) {
+                    wasOffline = true
+                    handler.post {
+                        if (inForeground && com.shadowdevelopers.i230529_i230723.data.Backend.uid != null) android.widget.Toast.makeText(this@KinnectApplication,
+                            "You're offline · changes will sync when you reconnect", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+            })
+        }
     }
 
     override fun onActivityStarted(activity: Activity) {

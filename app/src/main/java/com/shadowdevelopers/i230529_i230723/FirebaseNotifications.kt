@@ -49,6 +49,19 @@ object FirebaseNotifications {
         }
     }
 
+    /**
+     * The same notification can arrive twice: as an FCM push from the PHP worker and from the background poll of
+     * notifications/list.php. Both check this list of shown notification ids first, so it is displayed only once.
+     */
+    @Synchronized fun firstTime(context: android.content.Context, notificationId: String?): Boolean {
+        if (notificationId.isNullOrBlank()) return true
+        val prefs = context.getSharedPreferences("kinnect_shown", android.content.Context.MODE_PRIVATE)
+        val shown = prefs.getString("ids", "").orEmpty().split(",").filter { it.isNotBlank() }
+        if (notificationId in shown) return false
+        prefs.edit().putString("ids", (shown.takeLast(199) + notificationId).joinToString(",")).apply()
+        return true
+    }
+
     const val CHANNEL_MESSAGES = "kinnect_messages"
     const val CHANNEL_CALLS = "kinnect_calls"
 
@@ -124,8 +137,13 @@ class KinnectMessagingService : FirebaseMessagingService() {
             // Incoming call while Kinnect is closed or in the background: full-screen ringing notification.
             "call" -> CallNotifier.ring(this, data["callId"].orEmpty(), from.orEmpty(), title, data["video"] == "true")
             else -> {
+                if (!FirebaseNotifications.firstTime(this, data["notification_id"])) return // already shown by the background poll
                 if (from != null && from == ChatActivity.openChatWith) return // that chat is open on screen right now
-                if (body.isNotBlank()) FirebaseNotifications.show(this, title, body, data["chatId"], from)
+                if (body.isBlank()) return
+                when (data["type"]) {
+                    "message", "screenshot" -> FirebaseNotifications.show(this, title, body, data["chatId"], from)
+                    else -> FirebaseNotifications.showActivity(this, title, body, data["notification_id"] ?: body)
+                }
             }
         }
     }

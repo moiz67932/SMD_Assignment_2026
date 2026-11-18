@@ -99,6 +99,7 @@ class KinnectBackgroundService : Service() {
         val chatId: String? = null
         val body = row.optString("body")
         if (sender.isBlank() || type == "call") return // calls ring through CallManager instead
+        if (!FirebaseNotifications.firstTime(context, row.optString("id"))) return // already shown by an FCM push
         // Always post a system dropdown notification; the in-app list and badge update independently.
         ProfileCache.get(sender) { profile ->
             val name = profile.name.ifBlank { "Kinnect" }
