@@ -1,0 +1,2 @@
+<?php
+require_once dirname(__DIR__,2).'/src/media.php';require_method('POST');$u=current_user();$d=request_json();mutate($u,$d,'story.view',function($pdo)use($u,$d){$q=$pdo->prepare('SELECT * FROM stories WHERE id=?');$q->execute([$d['id']??'']);$s=$q->fetch();if(!$s||!can_view_story($s,$u['id']))throw new DomainException('Story unavailable');$q=$pdo->prepare('INSERT IGNORE INTO story_views(story_id,viewer_id,viewed_at) VALUES(?,?,UTC_TIMESTAMP(6))');$q->execute([$s['id'],$u['id']]);return ['ok'=>true];});

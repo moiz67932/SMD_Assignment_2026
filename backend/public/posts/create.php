@@ -1,0 +1,8 @@
+<?php
+require_once dirname(__DIR__,2).'/src/media.php';require_method('POST');$u=current_user();
+$multipart=str_starts_with($_SERVER['CONTENT_TYPE']??'','multipart/form-data');$d=$multipart?$_POST:request_json();$id=(string)($d['id']??'');$body=trim((string)($d['body']??''));$parts=[];
+if($multipart&&isset($_FILES['images'])){$f=$_FILES['images'];if(!is_array($f['name'])||count($f['name'])>10)json_response(['error'=>['code'=>'invalid_images','message'=>'Use up to ten images']],400);foreach($f['name'] as $i=>$name){$parts[]=['name'=>$name,'type'=>$f['type'][$i],'tmp_name'=>$f['tmp_name'][$i],'error'=>$f['error'][$i],'size'=>$f['size'][$i]];}}
+if(!valid_uuid($id)||($body===''&&!$parts)||strlen($body)>20000)json_response(['error'=>['code'=>'invalid_post','message'=>'Provide post UUID and text or images']],400);
+if($parts){$d['file_hashes']=array_map(function($f){if($f['error']!==UPLOAD_ERR_OK)throw new DomainException('Image upload failed');return hash_file('sha256',$f['tmp_name']);},$parts);}
+mutate($u,$d,'post.create',function($pdo)use($id,$body,$u,$parts){$ids=[];foreach($parts as $part){$mime=(new finfo(FILEINFO_MIME_TYPE))->file($part['tmp_name']);if(!str_starts_with($mime,'image/'))throw new DomainException('Posts require images');$m=upload_part($part,uuid_v4(),$u['id']);$ids[]=$m['id'];}
+$q=$pdo->prepare('INSERT INTO posts(id,author_id,body,created_at,updated_at) VALUES(?,?,?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))');$q->execute([$id,$u['id'],$body]);foreach($ids as $i=>$media){$q=$pdo->prepare('INSERT INTO post_media(post_id,media_id,position) VALUES(?,?,?)');$q->execute([$id,$media,$i]);}$q=$pdo->prepare('SELECT * FROM posts WHERE id=?');$q->execute([$id]);$post=$q->fetch();$post['media_ids']=$ids;return ['post'=>$post];});

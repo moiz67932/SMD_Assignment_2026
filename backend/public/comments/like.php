@@ -1,0 +1,4 @@
+<?php
+require_once dirname(__DIR__,2).'/src/visibility.php';require_method('POST');$u=current_user();$d=request_json();$id=(string)($d['comment_id']??'');$q=db()->prepare('SELECT post_id FROM comments WHERE id=? AND deleted_at IS NULL');$q->execute([$id]);$post=$q->fetchColumn();if(!$post||!can_view_post($post,$u['id']))json_response(['error'=>['code'=>'forbidden','message'=>'Comment unavailable']],403);
+if(!isset($d['liked'])||!is_bool($d['liked']))json_response(['error'=>['code'=>'invalid_state','message'=>'liked must be a boolean']],400);
+mutate($u,$d,'comment.like',function($pdo)use($id,$u,$d){if($d['liked']){$q=$pdo->prepare('INSERT IGNORE INTO comment_likes(comment_id,user_id,created_at) VALUES(?,?,UTC_TIMESTAMP(6))');}else{$q=$pdo->prepare('DELETE FROM comment_likes WHERE comment_id=? AND user_id=?');}$q->execute([$id,$u['id']]);return ['ok'=>true,'liked'=>$d['liked']];});
