@@ -39,7 +39,6 @@ class LiveActivity : AppCompatActivity() {
     private var engine: RtcEngine? = null
     private var started = false
     private var ended = false
-    private val lives get() = FirebaseData.database.getReference("lives")
 
     private val events = object : IRtcEngineEventHandler() {
         override fun onJoinChannelSuccess(channel: String?, uid: Int, elapsed: Int) {
@@ -127,21 +126,17 @@ class LiveActivity : AppCompatActivity() {
             watchViewers()
             return
         }
-        // Viewer: find out that the live video exists and which channel it uses.
-        lives.child(hostUid).get().addOnSuccessListener { snapshot ->
-            if (!snapshot.exists()) {
-                finishLive("This live video has ended")
-                return@addOnSuccessListener
+        // Viewer: GET lives/get.php (friends only) gives the channel; polling it counts me as watching and notices the end.
+        Backend.call({ Backend.api.get("lives/get.php?host=$hostUid&join=1").optJSONObject("live") }) { result ->
+            val live = result.getOrNull()
+            if (live == null) {
+                finishLive(if (result.isFailure) Forms.message(result.exceptionOrNull() as? Exception, "Could not join the live video") else "This live video has ended")
+                return@call
             }
-            channel = snapshot.child("channel").getValue(String::class.java).orEmpty()
-            val viewer = lives.child(hostUid).child("viewers").child(me)
-            viewer.onDisconnect().removeValue()
-            viewer.setValue(true)
+            channel = live.getString("channel")
             joinChannel()
             watchViewers()
-            // The live node disappears when the host ends the broadcast.
-            listeners.value(lives.child(hostUid)) { live -> if (!live.exists() && !ended) finishLive("The live video ended") }
-        }.addOnFailureListener { finishLive(Forms.message(it, "Could not join the live video")) }
+        }
     }
 
     private fun joinChannel() {
@@ -176,35 +171,30 @@ class LiveActivity : AppCompatActivity() {
         }
     }
 
-    /** Host: tells the database (and friends) that the live video has started. */
+    /**
+     * Host: POST lives/start.php (friends get a "live" notification on the first call), repeated every 10 s as a
+     * heartbeat; if the host's phone disappears, the server ends the live after 30 s.
+     */
     private fun publishLive() {
-        val reference = lives.child(me)
-        reference.onDisconnect().removeValue() // removed automatically if the phone loses connection
-        ProfileCache.get(me) { profile ->
-            reference.setValue(mapOf("channel" to channel, "hostId" to me, "hostName" to profile.name, "startedAt" to mapOf(".sv" to "timestamp")))
-        }
-        FirebaseData.friends.child(me).get().addOnSuccessListener { snapshot ->
-            val updates = mutableMapOf<String, Any>()
-            snapshot.children.filter { it.getValue(Boolean::class.java) == true }.mapNotNull { it.key }.take(40).forEach { friend ->
-                val id = FirebaseData.database.getReference("notifications").child(friend).push().key ?: return@forEach
-                updates["notifications/$friend/$id"] = mapOf("senderId" to me, "type" to "live", "body" to "is live now", "createdAt" to mapOf(".sv" to "timestamp"), "read" to false)
-            }
-            if (updates.isNotEmpty()) FirebaseData.database.reference.updateChildren(updates)
-        }
+        listeners.poll(10_000) { Backend.background { Backend.api.post("lives/start.php", org.json.JSONObject().put("channel", channel)) } }
     }
 
+    /** Both sides: viewer count, and for viewers, the end of the broadcast. */
     private fun watchViewers() {
-        listeners.value(lives.child(hostUid).child("viewers")) { snapshot ->
-            val count = snapshot.childrenCount.toInt()
-            findViewById<TextView>(R.id.liveViewers).text = "$count watching"
+        listeners.poll(5_000) {
+            Backend.call({ Backend.api.get("lives/get.php?host=$hostUid" + if (host) "" else "&join=1").optJSONObject("live") }) { result ->
+                if (result.isFailure) return@call
+                val live = result.getOrNull()
+                if (live == null) { if (!host && !ended) finishLive("The live video ended"); return@call }
+                findViewById<TextView>(R.id.liveViewers).text = "${live.optInt("viewers")} watching"
+            }
         }
     }
 
     private fun leave() {
         if (ended) return
         ended = true
-        if (host) lives.child(me).removeValue()
-        else lives.child(hostUid).child("viewers").child(me).removeValue()
+        if (host) Backend.background { Backend.api.post("lives/end.php", org.json.JSONObject()) }
         finish()
     }
 
@@ -221,7 +211,7 @@ class LiveActivity : AppCompatActivity() {
         listeners.removeAll()
         if (!ended) {
             ended = true
-            if (host) lives.child(me).removeValue() else lives.child(hostUid).child("viewers").child(me).removeValue()
+            if (host) Backend.background { Backend.api.post("lives/end.php", org.json.JSONObject()) }
         }
         engine?.leaveChannel()
         if (engine != null) RtcEngine.destroy()

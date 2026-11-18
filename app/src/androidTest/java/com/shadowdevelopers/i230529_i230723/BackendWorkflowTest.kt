@@ -18,7 +18,7 @@ import androidx.test.espresso.matcher.ViewMatchers.withSubstring
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.google.firebase.auth.FirebaseAuth
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import org.hamcrest.Matcher
 import org.hamcrest.Matchers.allOf
 import org.junit.After
@@ -26,7 +26,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Two end-to-end tests against the real Firebase project (see README "Espresso tests").
+ * Two end-to-end tests against the running Kinnect PHP/MySQL backend (see README "Espresso tests").
  * They need a seeded account that has finished Edit profile and has at least one friend.
  * Credentials are passed as instrumentation arguments, never stored in the repo:
  *   testEmail, testPassword, friendName (the friend's display name exactly as shown in the app)
@@ -34,12 +34,13 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class BackendWorkflowTest {
 
+    /** auth/logout.php revokes the token; the SQLite cache and pending queue are cleared (as Menu > Log out does). */
     @After
     fun signOut() {
-        FirebaseAuth.getInstance().signOut()
+        Backend.logout()
     }
 
-    /** Log in, publish a text post, and see it at the top of the Home feed (written to and read back from RTDB). */
+    /** Log in (auth/login.php), publish a text post (queued, then posts/create.php), and see it in the Home feed. */
     @Test
     fun loginThenCreatedPostAppearsInHomeFeed() {
         signIn()
@@ -75,7 +76,7 @@ class BackendWorkflowTest {
     }
 
     private fun signIn() {
-        FirebaseAuth.getInstance().signOut()
+        Backend.logout()
         ActivityScenario.launch(LoginActivity::class.java)
         onView(withId(R.id.emailInput)).perform(clearText(), typeText(argument("testEmail")))
         onView(withId(R.id.passwordInput)).perform(clearText(), typeText(argument("testPassword")))
@@ -89,7 +90,7 @@ class BackendWorkflowTest {
         InstrumentationRegistry.getArguments().getString(name)?.takeIf { it.isNotBlank() }
             ?: throw IllegalStateException("Pass -Pandroid.testInstrumentationRunnerArguments.$name=… (see README)")
 
-    /** Polls until a view matching [matcher] is on screen (Firebase answers asynchronously), up to [timeoutMs]. */
+    /** Polls until a view matching [matcher] is on screen (the server answers asynchronously), up to [timeoutMs]. */
     private fun waitFor(matcher: Matcher<View>, timeoutMs: Long = 20_000) {
         val end = System.currentTimeMillis() + timeoutMs
         var last: Throwable? = null

@@ -58,8 +58,7 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.recyclerview)
     implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.auth)
-    implementation(libs.firebase.database)
+    // Assignment 3: Firebase is used ONLY for push notifications (FCM). Auth and data are the PHP/MySQL web services.
     implementation(libs.firebase.messaging)
     implementation(libs.agora.rtc)
     // Glide: shows pictures (decoded from the database or local files) in ImageViews and avatars.

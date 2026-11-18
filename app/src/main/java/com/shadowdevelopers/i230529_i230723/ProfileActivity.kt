@@ -107,16 +107,20 @@ class ProfileActivity : AppCompatActivity() {
             empty.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
         }
         when (name) {
-            "Videos" -> FirebaseData.database.getReference("highlights").child(userId).get().addOnSuccessListener { snapshot ->
-                showRows(snapshot.children.filter { it.child("type").getValue(String::class.java) == MediaUploader.VIDEO }.map {
-                    TextRow(it.key.orEmpty(), it.child("label").getValue(String::class.java)?.ifBlank { null } ?: "Video highlight",
-                        "Tap to play", it.child("mediaRef").getValue(String::class.java).orEmpty())
-                }, "No videos yet. Highlight a video story from Your story.")
-            }.addOnFailureListener { showRows(emptyList(), Forms.message(it, "Could not load videos")) }
-            "Groups" -> FirebaseData.database.getReference("userGroups").child(userId).get().addOnSuccessListener { snapshot ->
-                showRows(snapshot.children.map { TextRow(it.key.orEmpty(), it.child("name").getValue(String::class.java) ?: "Group", "Tap to open the chat", "group:") },
-                    "No groups yet. Create one from Menu → Groups.")
-            }.addOnFailureListener { showRows(emptyList(), Forms.message(it, "Could not load groups")) }
+            // Video highlights (GET highlights/list.php) and my groups (GET groups/list.php).
+            "Videos" -> Backend.call({ Backend.api.get("highlights/list.php?user=$userId").getJSONArray("highlights") }) { result ->
+                result.onSuccess { list ->
+                    showRows((0 until list.length()).map { list.getJSONObject(it) }.filter { it.optString("mime_type").startsWith("video") }.map {
+                        TextRow(it.getString("story_id"), it.optString("label").ifBlank { "Video highlight" }, "Tap to play", ProfileCache.mediaRef(it.getString("media_id")))
+                    }, "No videos yet. Highlight a video story from Your story.")
+                }.onFailure { showRows(emptyList(), Forms.message(it as? Exception, "Could not load videos")) }
+            }
+            "Groups" -> Backend.call({ Backend.api.get("groups/list.php").getJSONArray("groups") }) { result ->
+                result.onSuccess { list ->
+                    showRows((0 until list.length()).map { list.getJSONObject(it) }.map { TextRow(it.getString("id"), it.optString("name").ifBlank { "Group" }, "Tap to open the chat", "group:") },
+                        "No groups yet. Create one from Menu → Groups.")
+                }.onFailure { showRows(emptyList(), Forms.message(it as? Exception, "Could not load groups")) }
+            }
             else -> {
                 val posts = if (name == "Photos") allPosts.filter { it.images.isNotEmpty() } else allPosts
                 list.adapter = postAdapter

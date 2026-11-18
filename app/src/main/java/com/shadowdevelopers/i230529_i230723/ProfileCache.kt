@@ -1,6 +1,5 @@
 package com.shadowdevelopers.i230529_i230723
 
-import com.google.firebase.database.DataSnapshot
 import com.shadowdevelopers.i230529_i230723.data.Backend
 import org.json.JSONObject
 
@@ -22,16 +21,6 @@ data class UserProfile(
 object ProfileCache {
     private val cache = mutableMapOf<String, UserProfile>()
     private val waiting = mutableMapOf<String, MutableList<(UserProfile) -> Unit>>()
-
-    /** Assignment 2 (Firebase) shape; still used by screens that are not migrated yet. */
-    fun from(snapshot: DataSnapshot) = UserProfile(
-        uid = snapshot.key.orEmpty(),
-        name = snapshot.child("name").getValue(String::class.java) ?: "Kinnect member",
-        username = snapshot.child("username").getValue(String::class.java).orEmpty(),
-        bio = snapshot.child("bio").getValue(String::class.java).orEmpty(),
-        photo = snapshot.child("photo").getValue(String::class.java).orEmpty(),
-        cover = snapshot.child("cover").getValue(String::class.java).orEmpty()
-    )
 
     /** A `user` object from the PHP API (profiles/get.php, search, friends...). */
     fun fromJson(json: JSONObject) = UserProfile(

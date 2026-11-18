@@ -18,7 +18,6 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.google.firebase.auth.FirebaseAuth
 
 /**
  * Create post (07). Text and/or one or more photos (Photo picker 08 or Camera 09). Photos are uploaded one

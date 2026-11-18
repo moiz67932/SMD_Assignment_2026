@@ -125,13 +125,18 @@ class SearchActivity : AppCompatActivity() {
     /** Groups: only groups I am in (userGroups/{me}), by name. */
     private fun searchGroups(term: String, run: Int) {
         val me = Backend.uid ?: return
-        FirebaseData.database.getReference("userGroups").child(me).get().addOnSuccessListener { snapshot ->
-            if (run != generation) return@addOnSuccessListener
-            val rows = snapshot.children.map { TextRow(it.key.orEmpty(), it.child("name").getValue(String::class.java) ?: "Group", "Tap to open the chat") }
+        // My groups (GET groups/list.php), matched by name.
+        Backend.call({
+            val list = runCatching { Backend.api.get("groups/list.php").getJSONArray("groups") }.getOrNull()
+                ?: Backend.store.entity(me, "groups", "all")?.let { org.json.JSONArray(it) } ?: org.json.JSONArray()
+            (0 until list.length()).map { list.getJSONObject(it) }
+        }) { result ->
+            if (run != generation) return@call
+            val rows = result.getOrDefault(emptyList()).map { TextRow(it.getString("id"), it.optString("name").ifBlank { "Group" }, "Tap to open the chat") }
                 .filter { it.title.lowercase().contains(term) }
             rowAdapter.set(rows)
             showEmpty(if (rows.isEmpty()) "No group of yours matches \"$term\"" else null)
-        }.addOnFailureListener { if (run == generation) showEmpty(Forms.message(it, "Could not search groups")) }
+        }
     }
 
     /** Posts: text of my posts and my friends' posts (the feed; SQLite copy when offline). */
@@ -229,12 +234,15 @@ class SearchActivity : AppCompatActivity() {
             return
         }
         showEmpty("Searching…")
-        FirebaseData.marketplaceItems.orderByChild("createdAt").limitToLast(100).get().addOnCompleteListener { task ->
-            marketItems = if (task.isSuccessful) task.result.children.mapNotNull { item ->
-                val title = item.child("title").getValue(String::class.java) ?: return@mapNotNull null
-                MarketItem(item.key.orEmpty(), title, item.child("price").getValue(String::class.java).orEmpty(),
-                    item.child("ownerName").getValue(String::class.java).orEmpty(), item.child("createdAt").getValue(Long::class.java) ?: 0L)
-            } else emptyList()
+        // GET market/list.php (SQLite copy when offline).
+        Backend.call({
+            runCatching { Backend.api.get("market/list.php").getJSONArray("items") }.getOrNull()
+                ?: Backend.store.entity(me, "market", "all")?.let { org.json.JSONArray(it) } ?: org.json.JSONArray()
+        }) { result ->
+            val list = result.getOrDefault(org.json.JSONArray())
+            marketItems = (0 until list.length()).map { list.getJSONObject(it) }.map {
+                MarketItem(it.getString("id"), it.optString("title"), it.optString("price"), it.optString("seller_name"), TimeFormat.parse(it.optString("created_at")))
+            }
             if (run == generation) searchMarketplace(term, run)
         }
     }

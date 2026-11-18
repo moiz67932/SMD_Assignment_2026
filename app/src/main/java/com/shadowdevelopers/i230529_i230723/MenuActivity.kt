@@ -5,7 +5,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
-import com.google.firebase.auth.FirebaseAuth
 import android.widget.TextView
 
 class MenuActivity : AppCompatActivity() {
@@ -93,21 +92,47 @@ class MenuActivity : AppCompatActivity() {
     }
 
     private fun showSettings() {
-        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        val items = arrayOf("Signed in as ${user?.email ?: "unknown"}", "Send a password reset email", "Clear saved media cache", "Edit profile")
+        val email = Session.recentEmail(this) ?: "your account"
+        val items = arrayOf("Signed in as $email", "Change password", "Clear downloaded media", "Edit profile")
         androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Settings").setItems(items) { _, which ->
             when (which) {
-                1 -> user?.email?.let { email ->
-                    com.google.firebase.auth.FirebaseAuth.getInstance().sendPasswordResetEmail(email)
-                        .addOnSuccessListener { android.widget.Toast.makeText(this, "Reset email sent to $email", android.widget.Toast.LENGTH_LONG).show() }
-                        .addOnFailureListener { android.widget.Toast.makeText(this, Forms.message(it, "Could not send the email"), android.widget.Toast.LENGTH_LONG).show() }
-                }
+                1 -> changePassword()
                 2 -> {
-                    java.io.File(cacheDir, "media_files").deleteRecursively()
-                    android.widget.Toast.makeText(this, "Cache cleared", android.widget.Toast.LENGTH_SHORT).show()
+                    MediaLoader.clear()
+                    android.widget.Toast.makeText(this, "Downloaded media cleared", android.widget.Toast.LENGTH_SHORT).show()
                 }
                 3 -> startActivity(Intent(this, EditProfileActivity::class.java))
             }
         }.setNegativeButton("Close", null).show()
     }
+
+    /** POST auth/password.php: the current password is checked on the server; the new one is stored as a hash. */
+    private fun changePassword() {
+        val density = resources.displayMetrics.density
+        fun field(hint: String) = android.widget.EditText(this).apply {
+            this.hint = hint
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val current = field("Current password")
+        val fresh = field("New password (at least 8 characters)")
+        val form = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            val pad = (20 * density).toInt(); setPadding(pad, pad / 2, pad, 0)
+            addView(current); addView(fresh)
+        }
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Change password").setView(form)
+            .setPositiveButton("Save", null).setNegativeButton("Cancel", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                if (fresh.text.length < 8) return@setOnClickListener run { Forms.error(fresh, "Use at least 8 characters") }
+                val body = org.json.JSONObject().put("current_password", current.text.toString()).put("new_password", fresh.text.toString())
+                Backend.call({ Backend.api.post("auth/password.php", body) }) { result ->
+                    result.onSuccess { dialog.dismiss(); android.widget.Toast.makeText(this, "Password changed", android.widget.Toast.LENGTH_SHORT).show() }
+                        .onFailure { Forms.error(current, Forms.message(it as? Exception, "Could not change the password")) }
+                }
+            }
+        }
+        dialog.show()
+    }
+
 }

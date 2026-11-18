@@ -15,16 +15,11 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.Query
-import com.google.firebase.database.ValueEventListener
 
 data class MarketItem(val id: String, val title: String, val price: String, val seller: String, val createdAt: Long)
 
 class MarketplaceActivity : AppCompatActivity() {
     private val badges by lazy { TabBadges(this) }
-    private var itemsQuery: Query? = null
-    private var itemsListener: ValueEventListener? = null
     private lateinit var adapter: MarketItemAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,28 +37,23 @@ class MarketplaceActivity : AppCompatActivity() {
             layoutManager = GridLayoutManager(this@MarketplaceActivity, 2)
             adapter = this@MarketplaceActivity.adapter
         }
-        itemsQuery = FirebaseData.marketplaceItems.orderByChild("createdAt").limitToLast(100)
-        val observer = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val items = snapshot.children.mapNotNull { item ->
-                    val title = item.child("title").getValue(String::class.java) ?: return@mapNotNull null
-                    MarketItem(
-                        id = item.key.orEmpty(),
-                        title = title,
-                        price = item.child("price").getValue(String::class.java).orEmpty(),
-                        seller = item.child("ownerName").getValue(String::class.java).orEmpty(),
-                        createdAt = item.child("createdAt").getValue(Long::class.java) ?: 0L
-                    )
-                }.sortedByDescending { it.createdAt }
-                adapter.setItems(items)
-                findViewById<TextView>(R.id.marketplaceCount).text = if (items.size == 1) "1 item" else "${items.size} items"
+        loadItems()
+    }
+
+    /** GET market/list.php (cached in SQLite, so the items also show offline). */
+    private fun loadItems() {
+        val me = Backend.uid ?: return
+        Backend.call({
+            runCatching { Backend.api.get("market/list.php").getJSONArray("items") }.onSuccess { Backend.store.putEntity(me, "market", "all", it.toString()) }
+                .getOrNull() ?: Backend.store.entity(me, "market", "all")?.let { org.json.JSONArray(it) } ?: org.json.JSONArray()
+        }) { result ->
+            val list = result.getOrNull() ?: return@call
+            val items = (0 until list.length()).map { list.getJSONObject(it) }.map {
+                MarketItem(it.getString("id"), it.optString("title"), it.optString("price"), it.optString("seller_name"), TimeFormat.parse(it.optString("created_at")))
             }
-            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
-                Toast.makeText(this@MarketplaceActivity, Forms.message(error), Toast.LENGTH_LONG).show()
-            }
+            adapter.setItems(items)
+            findViewById<TextView>(R.id.marketplaceCount).text = if (items.size == 1) "1 item" else "${items.size} items"
         }
-        itemsListener = observer
-        itemsQuery?.addValueEventListener(observer)
     }
 
     private fun showAddItemDialog() {
@@ -90,11 +80,12 @@ class MarketplaceActivity : AppCompatActivity() {
                     Toast.makeText(this, "Enter an item name and price while signed in", Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
                 }
-                FirebaseData.users.child(uid).child("name").get().addOnSuccessListener { owner ->
-                    val reference = FirebaseData.marketplaceItems.push()
-                    reference.setValue(mapOf("ownerId" to uid, "ownerName" to owner.getValue(String::class.java).orEmpty(), "title" to itemName, "price" to itemPrice, "createdAt" to mapOf(".sv" to "timestamp")))
-                        .addOnSuccessListener { dialog.dismiss() }
-                        .addOnFailureListener { Toast.makeText(this, it.localizedMessage ?: "Could not publish item", Toast.LENGTH_LONG).show() }
+                // POST market/create.php (queued).
+                val id = Backend.newId()
+                Backend.call({ Backend.enqueue("market_item", id, org.json.JSONObject().put("id", id), "market.create",
+                    org.json.JSONObject().put("id", id).put("title", itemName).put("price", itemPrice)) }) { result ->
+                    result.onSuccess { dialog.dismiss(); android.os.Handler(mainLooper).postDelayed({ loadItems() }, 800) }
+                        .onFailure { Toast.makeText(this, Forms.message(it as? Exception, "Could not publish item"), Toast.LENGTH_LONG).show() }
                 }
             }
         }
@@ -115,10 +106,6 @@ class MarketplaceActivity : AppCompatActivity() {
         super.onStop()
     }
 
-    override fun onDestroy() {
-        itemsListener?.let { itemsQuery?.removeEventListener(it) }
-        super.onDestroy()
-    }
 }
 
 class MarketItemAdapter : RecyclerView.Adapter<MarketItemAdapter.MarketItemViewHolder>() {

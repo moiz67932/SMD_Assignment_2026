@@ -13,26 +13,24 @@ import androidx.appcompat.app.AlertDialog
  *   notes/{uid} = { text, createdAt, expiresAt }
  */
 object Notes {
-    private val notes get() = FirebaseData.database.getReference("notes")
-    private const val LIFETIME_MS = 24L * 60 * 60 * 1000
-
-    /** Shows my note and my friends' notes; lets me write, change or delete mine. */
+    /** My note and my friends' notes (GET notes/list.php; the server hides expired ones). */
     fun show(activity: Activity) {
         val me = Backend.uid ?: return
-        FirebaseData.friends.child(me).get().addOnSuccessListener { friendSnap ->
-            val friends = friendSnap.children.filter { it.getValue(Boolean::class.java) == true }.mapNotNull { it.key }
-            val authors = listOf(me) + friends
-            val found = mutableMapOf<String, String>()
-            var left = authors.size
-            authors.forEach { uid ->
-                notes.child(uid).get().addOnCompleteListener { task ->
-                    val text = task.result?.child("text")?.getValue(String::class.java).orEmpty()
-                    val expires = task.result?.child("expiresAt")?.getValue(Long::class.java) ?: 0L
-                    if (task.isSuccessful && text.isNotBlank() && expires > FirebaseData.now()) found[uid] = text
-                    if (--left == 0 && !activity.isFinishing) display(activity, me, found)
-                }
-            }
-        }.addOnFailureListener { Toast.makeText(activity, Forms.message(it, "Could not load notes"), Toast.LENGTH_LONG).show() }
+        Backend.call({
+            val list = Backend.api.get("notes/list.php").getJSONArray("notes")
+            (0 until list.length()).map { list.getJSONObject(it) }.associate { it.getString("user_id") to it.getString("body") }
+        }) { result ->
+            result.onSuccess { display(activity, me, it) }
+                .onFailure { Toast.makeText(activity, Forms.message(it as? Exception, "Could not load notes"), Toast.LENGTH_LONG).show() }
+        }
+    }
+
+    /** Queued (works offline). An empty note deletes mine. */
+    private fun save(activity: Activity, body: String, done: String) {
+        Backend.call({ Backend.enqueue("note", Backend.newId(), org.json.JSONObject().put("body", body), "note.set", org.json.JSONObject().put("body", body)) }) { result ->
+            result.onSuccess { Toast.makeText(activity, done, Toast.LENGTH_SHORT).show() }
+                .onFailure { Toast.makeText(activity, Forms.message(it as? Exception, "Could not save the note"), Toast.LENGTH_LONG).show() }
+        }
     }
 
     private fun display(activity: Activity, me: String, found: Map<String, String>) {
@@ -48,7 +46,7 @@ object Notes {
             AlertDialog.Builder(activity).setTitle("Notes").setItems(items.toTypedArray()) { _, which ->
                 when {
                     which == 0 -> write(activity, me, mine.orEmpty())
-                    mine != null && which == 1 -> notes.child(me).removeValue().addOnSuccessListener { Toast.makeText(activity, "Note deleted", Toast.LENGTH_SHORT).show() }
+                    mine != null && which == 1 -> save(activity, "", "Note deleted")
                 }
             }.setNegativeButton("Close", null).show()
         }
@@ -73,9 +71,7 @@ object Notes {
             .setPositiveButton("Share") { _, _ ->
                 val text = field.text.toString().trim()
                 if (text.isBlank()) return@setPositiveButton
-                notes.child(me).setValue(mapOf("text" to text, "createdAt" to mapOf(".sv" to "timestamp"), "expiresAt" to FirebaseData.now() + LIFETIME_MS))
-                    .addOnSuccessListener { Toast.makeText(activity, "Note shared with your friends", Toast.LENGTH_SHORT).show() }
-                    .addOnFailureListener { Toast.makeText(activity, Forms.message(it, "Could not share the note"), Toast.LENGTH_LONG).show() }
+                save(activity, text, "Note shared with your friends")
             }.setNegativeButton("Cancel", null).show()
     }
 }

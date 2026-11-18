@@ -73,13 +73,23 @@ class GroupChatActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         if (me.isBlank() || groupId.isBlank()) return
-        val query = FirebaseData.database.getReference("groupMessages").child(groupId).orderByChild("timestamp").limitToLast(200)
-        listeners.value(query, onError = { Toast.makeText(this, Forms.message(it), Toast.LENGTH_LONG).show() }) { snapshot ->
+        // GET groups/messages.php every 3 s while open (cached in SQLite for offline reading).
+        listeners.poll(3_000) { load() }
+    }
+
+    private fun load() {
+        Backend.call({
+            runCatching { Backend.api.get("groups/messages.php?group_id=$groupId").getJSONArray("messages") }
+                .onSuccess { Backend.store.putEntity(me, "group_messages", groupId, it.toString()) }
+                .getOrNull() ?: Backend.store.entity(me, "group_messages", groupId)?.let { org.json.JSONArray(it) } ?: org.json.JSONArray()
+        }) { result ->
+            val list = result.getOrNull() ?: return@call
+            val pending = lines.filter { it.id.startsWith("pending:") }
             lines.clear()
-            snapshot.children.forEach {
-                lines += Line(it.key.orEmpty(), it.child("senderId").getValue(String::class.java).orEmpty(),
-                    it.child("senderName").getValue(String::class.java).orEmpty(), it.child("text").getValue(String::class.java).orEmpty())
+            (0 until list.length()).map { list.getJSONObject(it) }.forEach {
+                lines += Line(it.getString("id"), it.getString("sender_id"), it.optString("sender_name"), it.optString("body"))
             }
+            lines.addAll(pending.filter { p -> lines.none { it.id == p.id.removePrefix("pending:") } })
             recycler.adapter?.notifyDataSetChanged()
             if (lines.isNotEmpty()) recycler.scrollToPosition(lines.lastIndex)
         }
@@ -90,17 +100,18 @@ class GroupChatActivity : AppCompatActivity() {
         super.onStop()
     }
 
+    /** POST groups/send.php (queued, so it also works offline); shown at once as "sending…". */
     private fun sendMessage() {
         val text = input.text.toString().trim()
         if (text.isBlank()) return
-        val node = FirebaseData.database.getReference("groupMessages").child(groupId)
-        val id = node.push().key ?: return
+        val id = Backend.newId()
         input.setText("")
-        node.child(id).setValue(mapOf("senderId" to me, "senderName" to myName, "text" to text, "timestamp" to mapOf(".sv" to "timestamp")))
-            .addOnFailureListener {
-                input.setText(text)
-                Toast.makeText(this, Forms.message(it, "Could not send"), Toast.LENGTH_LONG).show()
-            }
+        lines += Line("pending:$id", me, myName, "$text  · sending…")
+        recycler.adapter?.notifyDataSetChanged()
+        recycler.scrollToPosition(lines.lastIndex)
+        Backend.call({ Backend.enqueue("group_message", id, org.json.JSONObject().put("id", id), "group.send", org.json.JSONObject().put("id", id).put("group_id", groupId).put("body", text)) }) { result ->
+            result.onFailure { Toast.makeText(this, Forms.message(it as? Exception, "Could not send"), Toast.LENGTH_LONG).show() }
+        }
     }
 
     /** Each row is full width; the bubble inside it sits on the right for my messages and on the left for others. */

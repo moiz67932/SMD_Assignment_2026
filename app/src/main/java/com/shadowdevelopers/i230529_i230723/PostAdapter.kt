@@ -9,7 +9,6 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
-import com.google.firebase.database.DataSnapshot
 
 data class FeedPost(
     val id: String,
@@ -70,20 +69,6 @@ data class FeedPost(
             )
         }
 
-        /** posts/{postId} -> FeedPost (Assignment 2 Firebase shape, kept only for screens not migrated yet). */
-        fun from(snapshot: DataSnapshot) = FeedPost(
-            id = snapshot.key.orEmpty(),
-            authorId = snapshot.child("authorId").getValue(String::class.java).orEmpty(),
-            authorName = snapshot.child("authorName").getValue(String::class.java) ?: "Kinnect member",
-            text = snapshot.child("text").getValue(String::class.java).orEmpty(),
-            createdAt = snapshot.child("createdAt").getValue(Long::class.java) ?: 0L,
-            images = snapshot.child("images").children.mapNotNull { it.getValue(String::class.java) },
-            background = snapshot.child("background").getValue(String::class.java).orEmpty(),
-            feeling = snapshot.child("feeling").getValue(String::class.java).orEmpty(),
-            location = snapshot.child("location").getValue(String::class.java).orEmpty(),
-            event = snapshot.child("event").getValue(String::class.java).orEmpty(),
-            tags = snapshot.child("tags").children.mapNotNull { c -> c.key?.let { k -> k to (c.getValue(String::class.java) ?: "") } }.toMap()
-        )
     }
 }
 

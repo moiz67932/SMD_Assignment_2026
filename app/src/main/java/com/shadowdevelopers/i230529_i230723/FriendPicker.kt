@@ -10,11 +10,14 @@ object FriendPicker {
     /** Loads my friends with their names; answers with (uid, name) pairs, sorted by name. */
     fun load(activity: Activity, onReady: (List<Pair<String, String>>) -> Unit) {
         val me = Backend.uid ?: return
-        FirebaseData.friends.child(me).get().addOnSuccessListener { snapshot ->
-            val friends = snapshot.children.filter { it.getValue(Boolean::class.java) == true }.mapNotNull { it.key }
+        // My friends from the PHP API (cached in SQLite, so the picker also works offline).
+        Backend.call({ runCatching { Backend.api.get("friends/list.php") }.getOrNull()?.also { Backend.store.putEntity(me, "friends", "all", it.toString()) }
+            ?: Backend.store.entity(me, "friends", "all")?.let { org.json.JSONObject(it) } }) { result ->
+            val list = result.getOrNull()?.optJSONArray("friends") ?: org.json.JSONArray()
+            val friends = (0 until list.length()).map { list.getJSONObject(it).also(ProfileCache::putJson).getString("id") }
             if (friends.isEmpty()) {
                 Toast.makeText(activity, "Add friends first", Toast.LENGTH_SHORT).show()
-                return@addOnSuccessListener
+                return@call
             }
             val result = arrayOfNulls<Pair<String, String>>(friends.size)
             var left = friends.size
@@ -25,7 +28,7 @@ object FriendPicker {
                     if (left == 0 && !activity.isFinishing) onReady(result.filterNotNull().sortedBy { it.second.lowercase() })
                 }
             }
-        }.addOnFailureListener { Toast.makeText(activity, Forms.message(it, "Could not load your friends"), Toast.LENGTH_LONG).show() }
+        }
     }
 
     fun single(activity: Activity, title: String, onPick: (uid: String, name: String) -> Unit) {

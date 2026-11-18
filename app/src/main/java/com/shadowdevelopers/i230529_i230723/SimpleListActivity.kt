@@ -91,29 +91,29 @@ class SimpleListActivity : AppCompatActivity() {
         super.onStart()
         if (me.isBlank()) return
         when (mode) {
-            "groups" -> listeners.value(FirebaseData.database.getReference("userGroups").child(me), onError = { show(emptyList(), Forms.message(it)) }) { snapshot ->
-                show(snapshot.children.map { TextRow(it.key.orEmpty(), it.child("name").getValue(String::class.java) ?: "Group", "Tap to open the chat") },
-                    "No groups yet. Tap + to create one with your friends.")
+            // GET groups/list.php (cached in SQLite); new groups appear without leaving the screen.
+            "groups" -> listeners.poll(10_000) {
+                Backend.call({
+                    runCatching { Backend.api.get("groups/list.php").getJSONArray("groups") }.onSuccess { Backend.store.putEntity(me, "groups", "all", it.toString()) }
+                        .getOrNull() ?: Backend.store.entity(me, "groups", "all")?.let { org.json.JSONArray(it) } ?: org.json.JSONArray()
+                }) { result ->
+                    val list = result.getOrNull() ?: return@call
+                    show((0 until list.length()).map { list.getJSONObject(it) }.map { TextRow(it.getString("id"), it.optString("name").ifBlank { "Group" }, "${it.optInt("member_count")} members · tap to open the chat") },
+                        "No groups yet. Tap + to create one with your friends.")
+                }
             }
-            "saved" -> listeners.value(FirebaseData.database.getReference("saved").child(me), onError = { show(emptyList(), Forms.message(it)) }) { snapshot ->
-                loadPosts(snapshot.children.mapNotNull { it.key }, "Nothing saved yet. Use the ⋯ button on a post and choose Save.") { true }
+            // Saved posts are kept on this phone (SQLite); each post is shown from the cache or the server.
+            "saved" -> Backend.call({
+                val ids = Backend.store.entities(me, "saved").map { org.json.JSONObject(it).getString("id") }
+                ids.mapNotNull { id -> runCatching { PostRepo.post(id, true) }.getOrNull() ?: PostRepo.post(id, false) }
+            }) { result -> show(result.getOrDefault(emptyList()).sortedByDescending { it.createdAt }.map(::rowFor), "Nothing saved yet. Use the ⋯ button on a post and choose Save.") }
+            // Memories: my own posts, oldest first.
+            "memories" -> Backend.call({ runCatching { PostRepo.feed(me, true) }.getOrElse { PostRepo.feed(me, false) } }) { result ->
+                show(result.getOrDefault(emptyList()).sortedBy { it.createdAt }.map(::rowFor), "Your memories appear here once you post.")
             }
-            "memories" -> listeners.value(FirebaseData.posts.orderByChild("authorId").equalTo(me), onError = { show(emptyList(), Forms.message(it)) }) { snapshot ->
-                val posts = snapshot.children.map { FeedPost.from(it) }.sortedBy { it.createdAt }
-                show(posts.map(::rowFor), "Your memories appear here once you post.")
-            }
-            else -> {
-                FirebaseData.friends.child(me).get().addOnSuccessListener { friends ->
-                    val authors = listOf(me) + friends.children.filter { it.getValue(Boolean::class.java) == true }.mapNotNull { it.key }
-                    val found = mutableListOf<FeedPost>()
-                    var left = authors.size
-                    authors.forEach { uid ->
-                        FirebaseData.posts.orderByChild("authorId").equalTo(uid).limitToLast(30).get().addOnCompleteListener { task ->
-                            if (task.isSuccessful) found += task.result.children.map { FeedPost.from(it) }.filter { it.event.isNotBlank() }
-                            if (--left == 0 && !isFinishing) show(found.sortedByDescending { it.createdAt }.map(::rowFor), "No events yet. Create one from Create post → Create event.")
-                        }
-                    }
-                }.addOnFailureListener { show(emptyList(), Forms.message(it, "Could not load events")) }
+            // Events: posts with an event from me and my friends (the feed).
+            else -> Backend.call({ runCatching { PostRepo.feed(fromServer = true) }.getOrElse { PostRepo.feed(fromServer = false) } }) { result ->
+                show(result.getOrDefault(emptyList()).filter { it.event.isNotBlank() }.map(::rowFor), "No events yet. Create one from Create post → Create event.")
             }
         }
     }
@@ -129,21 +129,6 @@ class SimpleListActivity : AppCompatActivity() {
         listOf(TimeFormat.ago(post.createdAt), post.text).filter { it.isNotBlank() }.joinToString(" · "),
         post.id
     )
-
-    private fun loadPosts(ids: List<String>, emptyMessage: String, keep: (FeedPost) -> Boolean) {
-        if (ids.isEmpty()) {
-            show(emptyList(), emptyMessage)
-            return
-        }
-        val found = mutableListOf<FeedPost>()
-        var left = ids.size
-        ids.forEach { id ->
-            FirebaseData.posts.child(id).get().addOnCompleteListener { task ->
-                if (task.isSuccessful && task.result.exists()) FeedPost.from(task.result).takeIf(keep)?.let { found += it }
-                if (--left == 0 && !isFinishing) show(found.sortedByDescending { it.createdAt }.map(::rowFor), emptyMessage)
-            }
-        }
-    }
 
     private fun show(rows: List<TextRow>, emptyMessage: String) {
         adapter.set(rows)
@@ -181,16 +166,14 @@ class SimpleListActivity : AppCompatActivity() {
             }.setNegativeButton("Cancel", null).show()
     }
 
+    /** POST groups/create.php (queued): me + the chosen friends. */
     private fun saveGroup(name: String, friends: List<String>) {
-        val root = FirebaseData.database.reference
-        val id = root.child("groups").push().key ?: return
-        val members = (friends + me).associateWith { true }
-        val updates = mutableMapOf<String, Any>(
-            "groups/$id" to mapOf("name" to name, "createdBy" to me, "createdAt" to mapOf(".sv" to "timestamp"), "members" to members)
-        )
-        members.keys.forEach { uid -> updates["userGroups/$uid/$id"] = mapOf("name" to name) }
-        root.updateChildren(updates)
-            .addOnSuccessListener { Toast.makeText(this, "Group created", Toast.LENGTH_SHORT).show() }
-            .addOnFailureListener { Toast.makeText(this, Forms.message(it, "Could not create the group"), Toast.LENGTH_LONG).show() }
+        val id = Backend.newId()
+        val payload = org.json.JSONObject().put("id", id).put("name", name).put("members", org.json.JSONArray(friends))
+        Backend.call({ Backend.enqueue("group", id, org.json.JSONObject().put("id", id).put("name", name), "group.create", payload) }) { result ->
+            result.onSuccess { Toast.makeText(this, if (Backend.online()) "Group created" else "Group saved. It will be created when you're online.", Toast.LENGTH_SHORT).show() }
+                .onFailure { Toast.makeText(this, Forms.message(it as? Exception, "Could not create the group"), Toast.LENGTH_LONG).show() }
+        }
     }
+
 }

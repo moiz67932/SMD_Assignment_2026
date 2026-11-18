@@ -9,13 +9,6 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.TextView
-import com.google.firebase.FirebaseNetworkException
-import com.google.firebase.FirebaseTooManyRequestsException
-import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
-import com.google.firebase.auth.FirebaseAuthInvalidUserException
-import com.google.firebase.auth.FirebaseAuthUserCollisionException
-import com.google.firebase.auth.FirebaseAuthWeakPasswordException
-import com.google.firebase.database.DatabaseException
 
 /** Small helpers that make forms behave the way people expect (keyboard actions, busy buttons, clear errors). */
 object Forms {
@@ -80,25 +73,13 @@ object Forms {
         return false
     }
 
-    /** Same, for errors delivered to a database listener (onCancelled). */
-    fun message(error: com.google.firebase.database.DatabaseError): String =
-        message(error.toException(), "Could not load this right now. Check your connection.")
-
-    /** Plain-language versions of Firebase errors. */
+    /** Plain-language versions of server and connection errors (shown in toasts and on fields). */
     fun message(error: Exception?, fallback: String): String = when (error) {
-        is FirebaseAuthUserCollisionException -> "An account with this email already exists. Log in instead."
-        is FirebaseAuthWeakPasswordException -> "That password is too weak. Use at least 6 characters."
-        is FirebaseAuthInvalidUserException -> "No account was found with this email."
-        is FirebaseAuthInvalidCredentialsException -> "The email or password is not correct."
-        is FirebaseTooManyRequestsException -> "Too many attempts. Wait a minute and try again."
-        is FirebaseNetworkException -> "No internet connection. Check your connection and try again."
         is com.shadowdevelopers.i230529_i230723.data.ApiClient.ApiException -> when (error.status) {
             401 -> if (error.code == "invalid_credentials") "The email or password is not correct." else "Your session ended. Please log in again."
             else -> error.message?.takeIf { it.isNotBlank() } ?: fallback
         }
         is java.io.IOException -> "Can't reach the Kinnect server. Check your Wi-Fi and that the backend is running."
-        is DatabaseException -> if (error.message.orEmpty().contains("permission", ignoreCase = true))
-            "The server refused to save this (database rules). Make sure the latest rules are published." else fallback
         null -> fallback
         else -> error.localizedMessage?.takeIf { it.isNotBlank() } ?: fallback
     }

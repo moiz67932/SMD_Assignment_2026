@@ -27,13 +27,13 @@ object TimeFormat {
 
     fun ago(time: Long): String {
         if (time <= 0L) return "now"
-        val diff = (FirebaseData.now() - time).coerceAtLeast(0)
+        val diff = (System.currentTimeMillis() - time).coerceAtLeast(0)
         val minutes = diff / 60_000
         return when {
             minutes < 1 -> "now"
             minutes < 60 -> "${minutes}m"
-            minutes < 24 * 60 && isSameDay(time, FirebaseData.now()) -> "${minutes / 60}h"
-            isSameDay(time, FirebaseData.now() - 86_400_000) -> "Yesterday"
+            minutes < 24 * 60 && isSameDay(time, System.currentTimeMillis()) -> "${minutes / 60}h"
+            isSameDay(time, System.currentTimeMillis() - 86_400_000) -> "Yesterday"
             minutes < 24 * 60 -> "${minutes / 60}h"
             isSameYear(time) -> SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(time))
             else -> SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(time))
