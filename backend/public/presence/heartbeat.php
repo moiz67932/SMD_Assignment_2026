@@ -1,0 +1,2 @@
+<?php
+require_once dirname(__DIR__,2).'/src/bootstrap.php';require_method('POST');$u=current_user();$hash=hash('sha256',substr($_SERVER['HTTP_AUTHORIZATION'],7));$q=db()->prepare('INSERT INTO presence_sessions(session_id,user_id,last_heartbeat,expires_at) SELECT id,user_id,UTC_TIMESTAMP(6),DATE_ADD(UTC_TIMESTAMP(6),INTERVAL 45 SECOND) FROM sessions WHERE token_hash=? ON DUPLICATE KEY UPDATE last_heartbeat=UTC_TIMESTAMP(6),expires_at=DATE_ADD(UTC_TIMESTAMP(6),INTERVAL 45 SECOND)');$q->execute([$hash]);json_response(['ok'=>true]);

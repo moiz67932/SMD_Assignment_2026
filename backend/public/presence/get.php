@@ -1,0 +1,2 @@
+<?php
+require_once dirname(__DIR__,2).'/src/bootstrap.php';require_method('GET');current_user();$q=db()->prepare('SELECT MAX(p.last_heartbeat) AS last_seen,COALESCE(MAX(p.expires_at>UTC_TIMESTAMP(6) AND s.revoked_at IS NULL AND s.expires_at>UTC_TIMESTAMP(6)),0) AS online FROM presence_sessions p JOIN sessions s ON s.id=p.session_id WHERE p.user_id=?');$q->execute([$_GET['id']??'']);json_response(['presence'=>$q->fetch()]);
