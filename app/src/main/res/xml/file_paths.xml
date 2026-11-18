@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="captured_media" path="." />
+    <!-- Downloaded chat files / media and files waiting to upload (opened with another app from Chat). -->
+    <files-path name="media_cache" path="media_cache/" />
+    <files-path name="pending_media" path="pending_media/" />
 </paths>

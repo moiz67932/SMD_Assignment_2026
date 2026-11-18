@@ -36,6 +36,7 @@ class SyncJobService : JobService() {
             "message.send"->"messages/send.php"
             "message.edit"->"messages/edit.php"
             "message.delete"->"messages/delete.php"
+        "message.heart"->"messages/heart.php"
             "chat.ensure"->"chats/ensure.php"
             "chat.screenshot"->"chats/screenshot.php"
             "story.create"->"stories/create.php"

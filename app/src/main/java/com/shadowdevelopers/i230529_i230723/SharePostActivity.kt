@@ -42,13 +42,13 @@ class SharePostActivity : AppCompatActivity() {
             layoutManager = LinearLayoutManager(this@SharePostActivity)
             adapter = this@SharePostActivity.adapter
         }
-        FirebaseData.posts.child(postId).get().addOnSuccessListener { snapshot ->
-            if (!snapshot.exists()) {
-                Toast.makeText(this, "This post was removed", Toast.LENGTH_SHORT).show()
+        Backend.call({ runCatching { PostRepo.post(postId, fromServer = true) }.getOrNull() ?: PostRepo.post(postId, fromServer = false) }) { result ->
+            val value = result.getOrNull()
+            if (value == null) {
+                Toast.makeText(this, "This post is not available", Toast.LENGTH_SHORT).show()
                 finish()
-                return@addOnSuccessListener
+                return@call
             }
-            val value = FeedPost.from(snapshot)
             post = value
             findViewById<TextView>(R.id.sharePostAuthor).text = value.authorName
             findViewById<TextView>(R.id.sharePostSnippet).text = value.text.ifBlank { if (value.images.isEmpty()) "" else "${value.images.size} photo(s)" }
@@ -56,15 +56,16 @@ class SharePostActivity : AppCompatActivity() {
                 findViewById<ImageView>(R.id.sharePostImage).apply { visibility = View.VISIBLE; MediaLoader.load(this, ref) }
             }
             adapter.notifyDataSetChanged()
-        }.addOnFailureListener { Toast.makeText(this, it.localizedMessage ?: "Could not load the post", Toast.LENGTH_LONG).show() }
+        }
     }
 
     override fun onStart() {
         super.onStart()
         if (me.isBlank()) return
-        listeners.value(FirebaseData.friends.child(me)) { snapshot ->
+        // My friends (to send the post to), kept fresh while the screen is open.
+        val friendsChanged: () -> Unit = {
             friends.clear()
-            snapshot.children.filter { it.getValue(Boolean::class.java) == true }.mapNotNullTo(friends) { it.key }
+            friends.addAll(Friends.friends)
             loaded = true
             adapter.notifyDataSetChanged()
             findViewById<TextView>(R.id.shareEmpty).apply {
@@ -72,6 +73,10 @@ class SharePostActivity : AppCompatActivity() {
                 text = if (loaded) "Add friends to share posts with them" else "Loading your friends…"
             }
         }
+        Friends.observe(friendsChanged)
+        listeners.onRemove { Friends.unobserve(friendsChanged) }
+        Friends.refresh()
+        friendsChanged()
     }
 
     override fun onStop() {

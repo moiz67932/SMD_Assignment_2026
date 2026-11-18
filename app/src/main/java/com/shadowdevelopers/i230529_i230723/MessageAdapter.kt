@@ -35,7 +35,9 @@ data class ChatMessage(
     /** type "video": a short clip; type "audio": a voice message and its length in seconds */
     val videoRef: String = "",
     val audioRef: String = "",
-    val durationSec: Int = 0
+    val durationSec: Int = 0,
+    /** type "file": any document (PDF, ZIP...); text holds its name */
+    val fileRef: String = ""
 )
 
 /** What the chat list shows: the intro card, a message (with its display flags) or the typing bubble. */
@@ -65,6 +67,8 @@ class MessageAdapter(
     private val rows = mutableListOf<ChatRow>()
     /** The other person (for avatars on their bubbles, the intro card, the typing row and the seen dot). */
     var other: UserProfile = UserProfile("", "")
+    /** My messages (or edits) still queued offline: shown with "Pending" under the bubble. */
+    var pendingIds: Set<String> = emptySet()
     var introSubtitle = ""
     private var lastTapId = ""
     private var lastTapAt = 0L
@@ -205,6 +209,23 @@ class MessageAdapter(
                         .putStringArrayListExtra("media_types", arrayListOf(MediaUploader.VIDEO)))
                 }
             }
+            // File message: "📄 report.pdf"; tap to open it with an app on the phone (downloaded once, then offline too).
+            if (message.type == "file" && message.fileRef.isNotBlank()) {
+                text.visibility = View.VISIBLE
+                text.text = "📄 ${message.text.ifBlank { "File" }}"
+                text.setOnClickListener {
+                    MediaLoader.resolveModel(message.fileRef) { model ->
+                        val file = (model as? java.io.File) ?: android.net.Uri.parse(model?.toString() ?: return@resolveModel).path?.let { java.io.File(it) }
+                        if (file == null || !file.exists()) {
+                            android.widget.Toast.makeText(context, "File unavailable offline", android.widget.Toast.LENGTH_SHORT).show()
+                            return@resolveModel
+                        }
+                        val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+                        val open = Intent(Intent.ACTION_VIEW).setDataAndType(uri, context.contentResolver.getType(uri) ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        runCatching { context.startActivity(Intent.createChooser(open, message.text)) }
+                    }
+                }
+            } else if (message.type != "file") text.setOnClickListener(null)
             // Voice message: tap the round button to play / stop.
             audioBubble.visibility = if (isAudio) View.VISIBLE else View.GONE
             if (isAudio) {
@@ -230,7 +251,9 @@ class MessageAdapter(
                 addRule(if (mine) RelativeLayout.ALIGN_PARENT_START else RelativeLayout.ALIGN_PARENT_END)
             }
 
-            val parts = listOfNotNull(if (message.edited) "Edited" else null, if (row.showTime) TimeFormat.clock(message.timestamp) else null)
+            val pending = message.id in pendingIds
+            val parts = listOfNotNull(if (message.edited) "Edited" else null, if (row.showTime || pending) TimeFormat.clock(message.timestamp) else null,
+                if (pending) "Pending" else null)
             status.visibility = if (parts.isEmpty()) View.GONE else View.VISIBLE
             status.text = parts.joinToString(" · ")
 

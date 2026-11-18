@@ -17,10 +17,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.Query
-import com.google.firebase.database.ValueEventListener
 
 data class Conversation(
     val chatId: String,
@@ -39,8 +35,8 @@ class ChatsActivity : AppCompatActivity() {
     private val me by lazy { Backend.uid.orEmpty() }
     private val listeners = ListenerBag()
     private val conversations = linkedMapOf<String, Conversation>()
-    private val perChat = mutableMapOf<String, MutableList<Pair<Query, ValueEventListener>>>()
-    private val presence = mutableMapOf<String, Pair<Query, ValueEventListener>>()
+    /** Conversations with an offline message still waiting to send. */
+    private val pendingPeers = mutableSetOf<String>()
     private val online = mutableSetOf<String>()
     private val friends = mutableListOf<String>()
     private var loaded = false
@@ -84,71 +80,46 @@ class ChatsActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         if (me.isBlank()) return
-        listeners.value(FirebaseData.userChats.child(me), onError = { showEmpty(Forms.message(it)) }) { snapshot ->
-            val current = snapshot.children.mapNotNull { child -> child.getValue(String::class.java)?.let { child.key.orEmpty() to it } }.toMap()
-            perChat.keys.filter { it !in current }.forEach { removeChat(it) }
-            current.forEach { (chatId, peer) -> if (chatId !in perChat) listenChat(chatId, peer) }
-            loaded = true
-            refresh()
-        }
-        listeners.value(FirebaseData.friends.child(me)) { snapshot ->
-            friends.clear()
-            snapshot.children.filter { it.getValue(Boolean::class.java) == true }.mapNotNullTo(friends) { it.key }
-            friends.take(40).forEach { watchPresence(it) }
-            refresh()
-        }
+        // Conversations: SQLite first, then GET chats/list.php every 4 s (new messages and unread counts appear live).
+        loadChats(fromServer = false)
+        listeners.poll(4_000) { loadChats(fromServer = true) }
+        // Active now strip and green dots: GET presence/many.php for my friends and chat partners.
+        val friendsChanged: () -> Unit = { friends.clear(); friends.addAll(Friends.friends); refresh() }
+        Friends.observe(friendsChanged)
+        listeners.onRemove { Friends.unobserve(friendsChanged) }
+        listeners.poll(30_000) { Friends.refresh() }
+        listeners.poll(15_000) { loadPresence() }
     }
 
     override fun onStop() {
         listeners.removeAll()
-        perChat.keys.toList().forEach { removeChat(it) }
-        presence.values.forEach { (query, listener) -> query.removeEventListener(listener) }
-        presence.clear()
         super.onStop()
     }
 
-    private fun listenChat(chatId: String, peerUid: String) {
-        val conversation = Conversation(chatId, peerUid)
-        conversations[chatId] = conversation
-        val attached = mutableListOf<Pair<Query, ValueEventListener>>()
-        fun add(query: Query, action: (DataSnapshot) -> Unit) {
-            val listener = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) { action(snapshot); refresh() }
-                override fun onCancelled(error: DatabaseError) = Unit
+    private fun loadChats(fromServer: Boolean) {
+        Backend.call({ runCatching { ChatRepo.summaries(fromServer) }.getOrElse { ChatRepo.summaries(false) } }) { result ->
+            val list = result.getOrNull() ?: return@call
+            conversations.clear()
+            pendingPeers.clear()
+            list.forEach { row ->
+                conversations[row.peer] = Conversation(row.chatId, row.peer, row.preview, if (row.fromMe) me else row.peer, row.time, row.unread)
+                if (row.pending) pendingPeers.add(row.peer)
             }
-            query.addValueEventListener(listener)
-            attached.add(query to listener)
+            adapter.pendingPeers = pendingPeers
+            loaded = true
+            refresh()
         }
-        val chat = FirebaseData.database.getReference("chats").child(chatId)
-        add(chat.child("lastMessage")) { message ->
-            conversation.lastMessage = message.child("text").getValue(String::class.java).orEmpty()
-            conversation.lastSenderId = message.child("senderId").getValue(String::class.java).orEmpty()
-            conversation.lastTime = message.child("timestamp").getValue(Long::class.java) ?: 0L
-        }
-        add(chat.child("unread").child(me)) { count -> conversation.unread = count.getValue(Int::class.java) ?: 0 }
-        perChat[chatId] = attached
-        watchPresence(peerUid)
     }
 
-    private fun removeChat(chatId: String) {
-        perChat.remove(chatId)?.forEach { (query, listener) -> query.removeEventListener(listener) }
-        conversations.remove(chatId)
-    }
-
-    /** presence/{uid}/online, shared by the conversation rows and the active strip. */
-    private fun watchPresence(uid: String) {
-        if (uid in presence) return
-        val query = FirebaseData.database.getReference("presence").child(uid)
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                if (snapshot.child("online").getValue(Boolean::class.java) == true) online.add(uid) else online.remove(uid)
-                refresh()
-            }
-
-            override fun onCancelled(error: DatabaseError) = Unit
+    private fun loadPresence() {
+        val ids = (friends + conversations.keys).distinct().take(100)
+        if (ids.isEmpty()) return
+        Backend.call({
+            val list = Backend.api.get("presence/many.php?ids=" + ids.joinToString(",")).getJSONArray("online")
+            (0 until list.length()).map { list.getString(it) }.toSet()
+        }) { result ->
+            result.onSuccess { now -> online.clear(); online.addAll(now); refresh() }
         }
-        query.addValueEventListener(listener)
-        presence[uid] = query to listener
     }
 
     private fun refresh() {
@@ -204,6 +175,8 @@ class ConversationAdapter(
     private val onOpen: (Conversation) -> Unit
 ) : RecyclerView.Adapter<ConversationAdapter.ConversationViewHolder>() {
     private val items = mutableListOf<Conversation>()
+    /** Chats whose newest message is still queued offline ("Pending"). */
+    var pendingPeers: Set<String> = emptySet()
 
     fun setItems(conversations: List<Conversation>) {
         items.clear()
@@ -228,7 +201,7 @@ class ConversationAdapter(
                 AvatarBinder.bind(avatar, profile.name, profile.photo)
             }
             // "You: See you at the pier · 1h"; bold while there are unread messages.
-            val preview = (if (conversation.lastSenderId == me) "You: " else "") + conversation.lastMessage
+            val preview = (if (conversation.peerUid in pendingPeers) "Pending · " else "") + (if (conversation.lastSenderId == me) "You: " else "") + conversation.lastMessage
             val time = if (conversation.lastTime > 0) " · ${TimeFormat.ago(conversation.lastTime)}" else ""
             val unread = conversation.unread > 0
             itemView.findViewById<TextView>(R.id.chatLastMessage).apply {

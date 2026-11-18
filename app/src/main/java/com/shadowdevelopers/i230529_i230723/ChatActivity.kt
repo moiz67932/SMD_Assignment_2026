@@ -1,5 +1,7 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
+import org.json.JSONObject
 import android.app.Activity
 import android.content.Intent
 import android.os.Build
@@ -17,8 +19,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.ValueEventListener
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -32,8 +32,7 @@ import java.util.Locale
  * the database rules enforce the same 5 minutes on the server.
  */
 class ChatActivity : AppCompatActivity() {
-    private val currentUser by lazy { FirebaseAuth.getInstance().currentUser }
-    private val me by lazy { currentUser?.uid.orEmpty() }
+    private val me by lazy { Backend.uid.orEmpty() }
     private var otherUid = ""
     private var personName = "Kinnect member"
     private var chatId = ""
@@ -47,6 +46,8 @@ class ChatActivity : AppCompatActivity() {
     private var otherLastRead = 0L
     private var otherTyping = false
     private var isFriend = false
+    /** My messages / edits still queued offline ("Pending"). */
+    private var pendingIds: Set<String> = emptySet()
     private val handler = Handler(Looper.getMainLooper())
     private val stopTyping = Runnable { setTyping(false) }
     private lateinit var replyLabel: TextView
@@ -66,7 +67,6 @@ class ChatActivity : AppCompatActivity() {
         }
     }
 
-    private val chat get() = FirebaseData.database.getReference("chats").child(chatId)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -89,10 +89,18 @@ class ChatActivity : AppCompatActivity() {
             startActivity(Intent(this, OtherProfileActivity::class.java).putExtra("person_uid", otherUid))
         }
         // + and the gallery icon open the picker (photos and short videos); the camera icon takes a photo.
-        listOf(R.id.chatAttachmentButton, R.id.chatImageButton).forEach { viewId ->
-            findViewById<View>(viewId).setOnClickListener {
-                startActivityForResult(Intent(this, PhotoPickerActivity::class.java).putExtra("single", true), PICK_IMAGE)
-            }
+        findViewById<View>(R.id.chatImageButton).setOnClickListener {
+            startActivityForResult(Intent(this, PhotoPickerActivity::class.java).putExtra("single", true), PICK_IMAGE)
+        }
+        // + : photo/video or any file (PDF, document...).
+        findViewById<View>(R.id.chatAttachmentButton).setOnClickListener {
+            AlertDialog.Builder(this).setItems(arrayOf("Photo or video", "File")) { _, which ->
+                if (which == 0) startActivityForResult(Intent(this, PhotoPickerActivity::class.java).putExtra("single", true), PICK_IMAGE)
+                else {
+                    ExternalLaunch.mark()
+                    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"), PICK_FILE)
+                }
+            }.show()
         }
         findViewById<View>(R.id.chatCameraButton).setOnClickListener {
             startActivityForResult(Intent(this, CameraActivity::class.java).putExtra("for_post", true), TAKE_PHOTO)
@@ -124,15 +132,9 @@ class ChatActivity : AppCompatActivity() {
         messageAdapter.other = UserProfile(otherUid, personName)
         render()
 
-        chatId = ChatSender.chatId(me, otherUid)
-        ChatSender.ensureChat(me, otherUid, onReady = {
-            chatReady = true
-            askScreenshotPermissionOnce()
-            if (started) attach()
-        }, onError = { message ->
-            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-            finish()
-        })
+        // Opens instantly from SQLite (also offline); the server chat is created on first use (chats/ensure or with the first message).
+        chatReady = true
+        askScreenshotPermissionOnce()
     }
 
     override fun onStart() {
@@ -165,91 +167,63 @@ class ChatActivity : AppCompatActivity() {
         super.onStop()
     }
 
-    /** All live data for this conversation; removed again in onStop. */
+    /**
+     * The conversation: SQLite first (instant, offline), then GET messages/list.php every 3 s while the screen is open,
+     * so new messages, "Seen", typing and hearts appear without leaving the screen. Also refreshed when queued
+     * actions reach the server.
+     */
     private fun attach() {
         listeners.removeAll()
-        listeners.value(FirebaseData.profiles.child(otherUid)) { snapshot ->
-            val profile = ProfileCache.from(snapshot)
-            ProfileCache.put(profile)
+        ProfileCache.get(otherUid) { profile ->
             personName = profile.name
             findViewById<TextView>(R.id.chatToolbarName).text = profile.name
             AvatarBinder.bind(findViewById(R.id.chatToolbarAvatar), profile.name, profile.photo)
             messageAdapter.other = profile
             render()
         }
-        listeners.value(FirebaseData.database.getReference("presence").child(otherUid)) { snapshot ->
-            val online = snapshot.child("online").getValue(Boolean::class.java) == true
+        val friendsChanged: () -> Unit = { isFriend = otherUid in Friends.friends; render() }
+        Friends.observe(friendsChanged)
+        listeners.onRemove { Friends.unobserve(friendsChanged) }
+        Friends.refresh()
+        load(fromServer = false)
+        listeners.poll(3_000) { load(fromServer = true) }
+        listeners.poll(15_000) { loadPresence() }
+    }
+
+    private fun load(fromServer: Boolean) {
+        Backend.call({ runCatching { ChatRepo.conversation(otherUid, fromServer) }.getOrElse { ChatRepo.conversation(otherUid, false) } }) { result ->
+            val conversation = result.getOrNull() ?: return@call
+            messages = conversation.messages
+            hearts = conversation.hearts
+            pendingIds = conversation.pendingIds
+            otherLastRead = conversation.peerLastRead
+            otherTyping = conversation.peerTyping
+            messageAdapter.pendingIds = pendingIds
+            render()
+            if (fromServer) markRead()
+        }
+    }
+
+    /** Green dot and "Active now" / "Active 5m ago" (GET presence/get.php). */
+    private fun loadPresence() {
+        Backend.call({ Backend.api.get("presence/get.php?id=$otherUid").getJSONObject("presence") }) { result ->
+            val presence = result.getOrNull() ?: return@call
+            val online = presence.optInt("online") == 1
             findViewById<View>(R.id.chatToolbarOnline).visibility = if (online) View.VISIBLE else View.GONE
-            val lastSeen = snapshot.child("lastSeen").getValue(Long::class.java) ?: 0L
-            findViewById<TextView>(R.id.chatToolbarStatus).text = KinnectApplication.presenceLabel(online, lastSeen)
-        }
-        listeners.value(FirebaseData.friends.child(me).child(otherUid)) { snapshot ->
-            isFriend = snapshot.getValue(Boolean::class.java) == true
-            render()
-        }
-        listeners.value(chat.child("messages").orderByChild("timestamp").limitToLast(200), onError = {
-            Toast.makeText(this, Forms.message(it), Toast.LENGTH_LONG).show()
-        }) { snapshot ->
-            messages = snapshot.children.mapNotNull { parse(it) }
-            render()
-            markRead()
-        }
-        listeners.value(FirebaseData.messageReactions.child(chatId)) { snapshot ->
-            hearts = snapshot.children.associate { message -> message.key.orEmpty() to message.children.filter { it.getValue(String::class.java) == "heart" }.mapNotNull { it.key }.toSet() }
-            render()
-        }
-        listeners.value(chat.child("lastRead").child(otherUid)) { snapshot ->
-            otherLastRead = snapshot.getValue(Long::class.java) ?: 0L
-            render()
-        }
-        listeners.value(chat.child("typing").child(otherUid)) { snapshot ->
-            otherTyping = snapshot.getValue(Boolean::class.java) == true
-            render()
+            findViewById<TextView>(R.id.chatToolbarStatus).text = KinnectApplication.presenceLabel(online, TimeFormat.parse(presence.optString("last_seen")))
         }
     }
 
-    private fun parse(item: DataSnapshot): ChatMessage? {
-        val senderId = item.child("senderId").getValue(String::class.java) ?: return null
-        val text = { key: String -> item.child(key).getValue(String::class.java).orEmpty() }
-        val type = item.child("type").getValue(String::class.java) ?: "text"
-        return ChatMessage(
-            id = item.key.orEmpty(),
-            senderId = senderId,
-            text = text("text"),
-            timestamp = item.child("timestamp").getValue(Long::class.java) ?: 0L,
-            edited = item.child("edited").getValue(Boolean::class.java) == true,
-            replyToText = text("replyToText"),
-            system = type == "system",
-            type = type,
-            imageRef = text("imageRef"),
-            videoRef = text("videoRef"),
-            audioRef = text("audioRef"),
-            durationSec = item.child("durationSec").getValue(Int::class.java) ?: 0,
-            sharedPostId = text("sharedPostId"),
-            sharedAuthorName = text("sharedAuthorName"),
-            sharedSnippet = text("sharedSnippet"),
-            sharedImage = text("sharedImage"),
-            replyToSenderId = text("replyToSenderId")
-        )
-    }
-
-    /** Reset my unread counter and record when I last read, but only while this chat is on screen. */
+    /** Clears my unread count and tells the other person I have seen their messages (only while this chat is visible). */
     private fun markRead() {
         if (!visible || !chatReady) return
-        chat.child("unread").child(me).setValue(0)
-        chat.child("lastRead").child(me).setValue(mapOf(".sv" to "timestamp"))
+        Backend.background { ChatRepo.markRead(otherUid) }
     }
 
     private fun setTyping(typing: Boolean) {
         if (!chatReady) return
-        val reference = chat.child("typing").child(me)
-        if (typing) {
-            reference.onDisconnect().removeValue()
-            reference.setValue(true)
-        } else {
-            handler.removeCallbacks(stopTyping)
-            reference.removeValue()
-        }
+        if (!typing) handler.removeCallbacks(stopTyping)
+        Backend.background { ChatRepo.typing(otherUid, typing) }
     }
 
     /** Builds the list: intro card, messages with date breaks / grouping / hearts / seen dot, typing bubble. */
@@ -298,7 +272,7 @@ class ChatActivity : AppCompatActivity() {
     /** "TODAY 4:49 PM", "YESTERDAY 9:02 AM", "12 OCT 4:49 PM" */
     private fun dateLabel(time: Long): String {
         if (time <= 0) return ""
-        val now = FirebaseData.now()
+        val now = System.currentTimeMillis()
         val day = when {
             sameDay(time, now) -> "Today"
             sameDay(time, now - 86_400_000) -> "Yesterday"
@@ -310,7 +284,7 @@ class ChatActivity : AppCompatActivity() {
     private fun sendMessage() {
         val text = input.text.toString().trim().ifBlank { "👍" }
         val reply = replyingTo
-        ChatSender.send(this, me, otherUid, type = "text", text = text, preview = text, fields = replyFields(reply))
+        ChatSender.send(this, me, otherUid, type = "text", text = text, preview = text, fields = replyFields(reply), onSent = { load(fromServer = false) })
         input.text.clear()
         clearReply()
         setTyping(false)
@@ -354,29 +328,40 @@ class ChatActivity : AppCompatActivity() {
                 sendMedia(android.net.Uri.parse(uri), kind)
             }
             TAKE_PHOTO -> data.getStringExtra("media_uri")?.let { sendMedia(android.net.Uri.parse(it), MediaUploader.IMAGE) }
+            PICK_FILE -> data.data?.let(::sendFile)
         }
     }
 
-    /** Uploads a photo or short video (progress above the input), then sends it as an "image" / "video" message. */
+    /** Photo or video: copied into app storage and queued (upload, then the message). Shows at once; offline it waits. */
     private fun sendMedia(uri: android.net.Uri, kind: String) {
+        val video = kind == MediaUploader.VIDEO
+        sendAttachment(if (video) "video" else "image", uri, kind, JSONObject())
+    }
+
+    /** Any document (PDF, ZIP, text...) from the phone's files. */
+    private fun sendFile(uri: android.net.Uri) {
+        var name = "file"
+        contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) name = it.getString(0) ?: name }
+        val mime = contentResolver.getType(uri) ?: "application/octet-stream"
+        sendAttachment("file", uri, "file", JSONObject().put("file_name", name), mime)
+    }
+
+    private fun sendAttachment(type: String, uri: android.net.Uri, kind: String, extra: JSONObject, mime: String? = null) {
         val status = findViewById<TextView>(R.id.chatUploadStatus)
-        val label = if (kind == MediaUploader.VIDEO) "video" else "photo"
         status.visibility = View.VISIBLE
-        status.text = "Uploading $label…"
-        val reply = replyingTo
-        MediaUploader.upload(this, uri, kind,
-            onProgress = { status.text = "Uploading $label · $it%" },
-            onSuccess = { ref ->
-                status.visibility = View.GONE
-                val video = kind == MediaUploader.VIDEO
-                ChatSender.send(this, me, otherUid, type = if (video) "video" else "image", text = "", preview = if (video) "Video" else "Photo",
-                    fields = replyFields(reply) + ((if (video) "videoRef" else "imageRef") to ref))
-                clearReply()
-            },
-            onError = { message ->
-                status.visibility = View.GONE
-                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-            })
+        status.text = "Preparing…"
+        replyingTo?.let { reply -> replyFields(reply).forEach { (key, value) -> extra.put(mapReplyKey(key), value) } }
+        Backend.call({ ChatRepo.send(this, otherUid, type, "", extra, attachment = uri, attachmentKind = kind, fileMime = mime) }) { result ->
+            status.visibility = View.GONE
+            result.onSuccess { clearReply(); load(fromServer = false) }
+                .onFailure { Toast.makeText(this, Forms.message(it as? Exception, "Could not send"), Toast.LENGTH_LONG).show() }
+        }
+    }
+
+    private fun mapReplyKey(key: String) = when (key) {
+        "replyToMessageId" -> "reply_to_id"
+        "replyToSenderId" -> "reply_to_sender"
+        else -> "reply_to_text"
     }
 
     // ----- Voice messages -----
@@ -440,33 +425,22 @@ class ChatActivity : AppCompatActivity() {
             Toast.makeText(this, "Recording was too short. Hold on a little longer.", Toast.LENGTH_SHORT).show()
             return
         }
-        val status = findViewById<TextView>(R.id.chatUploadStatus)
-        status.visibility = View.VISIBLE
-        status.text = "Sending voice message…"
-        val reply = replyingTo
-        MediaUploader.upload(this, android.net.Uri.fromFile(file), MediaUploader.AUDIO,
-            onProgress = { status.text = "Sending voice message · $it%" },
-            onSuccess = { ref ->
-                status.visibility = View.GONE
-                ChatSender.send(this, me, otherUid, type = "audio", text = "", preview = "Voice message",
-                    fields = replyFields(reply) + mapOf("audioRef" to ref, "durationSec" to seconds))
-                clearReply()
-                file.delete()
-            },
-            onError = { message ->
-                status.visibility = View.GONE
-                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-            })
+        val extra = JSONObject().put("duration_sec", seconds)
+        replyingTo?.let { reply -> replyFields(reply).forEach { (key, value) -> extra.put(mapReplyKey(key), value) } }
+        Backend.call({ ChatRepo.send(this, otherUid, "audio", "", extra, attachment = android.net.Uri.fromFile(file), attachmentKind = MediaUploader.AUDIO) }) { result ->
+            result.onSuccess { clearReply(); load(fromServer = false) }
+                .onFailure { Toast.makeText(this, Forms.message(it as? Exception, "Could not send the voice message"), Toast.LENGTH_LONG).show() }
+        }
     }
 
     private fun toggleHeart(message: ChatMessage) {
         if (message.system) return
-        val reference = FirebaseData.messageReactions.child(chatId).child(message.id).child(me)
-        val task = if (me in hearts[message.id].orEmpty()) reference.removeValue() else reference.setValue("heart")
-        task.addOnFailureListener { Toast.makeText(this, it.localizedMessage ?: "Could not update the heart", Toast.LENGTH_SHORT).show() }
+        val hearted = me !in hearts[message.id].orEmpty()
+        Backend.call({ ChatRepo.heart(message.id, hearted) }) { load(fromServer = false) }
     }
 
-    private fun canChange(message: ChatMessage) = message.senderId == me && !message.system && FirebaseData.now() - message.timestamp < EDIT_WINDOW_MS
+    /** The 5-minute window is checked here for the menu and enforced again by the server. */
+    private fun canChange(message: ChatMessage) = message.senderId == me && !message.system && System.currentTimeMillis() - message.timestamp < EDIT_WINDOW_MS
 
     /** Reply / heart for any message; Edit (text only) and Delete only for my own message within 5 minutes. */
     private fun showMessageOptions(message: ChatMessage) {
@@ -498,14 +472,7 @@ class ChatActivity : AppCompatActivity() {
             .setPositiveButton("Save") { _, _ ->
                 val text = editor.text.toString().trim()
                 if (text.isBlank() || !canChange(message)) return@setPositiveButton tooLate()
-                chat.child("messages").child(message.id).updateChildren(mapOf("text" to text, "edited" to true))
-                    .addOnSuccessListener {
-                        // Keep the Chats preview right when the last message was edited.
-                        chat.child("lastMessage").child("messageId").get().addOnSuccessListener { last ->
-                            if (last.getValue(String::class.java) == message.id) chat.child("lastMessage").child("text").setValue(text)
-                        }
-                    }
-                    .addOnFailureListener { Toast.makeText(this, it.localizedMessage ?: "Could not edit (over 5 minutes?)", Toast.LENGTH_LONG).show() }
+                Backend.call({ ChatRepo.edit(message.id, text) }) { load(fromServer = false) }
             }
             .setNegativeButton("Cancel", null).show()
     }
@@ -513,45 +480,18 @@ class ChatActivity : AppCompatActivity() {
     private fun deleteMessage(message: ChatMessage) {
         AlertDialog.Builder(this).setMessage("Delete this message?")
             .setPositiveButton("Delete") { _, _ ->
-                chat.child("messages").child(message.id).removeValue()
-                    .addOnSuccessListener { refreshLastMessage(message.id) }
-                    .addOnFailureListener { Toast.makeText(this, it.localizedMessage ?: "Could not delete (over 5 minutes?)", Toast.LENGTH_LONG).show() }
+                Backend.call({ ChatRepo.delete(message.id) }) { load(fromServer = false) }
             }
             .setNegativeButton("Cancel", null).show()
     }
 
-    /** If the deleted message was the Chats preview, show the newest remaining message instead (or nothing). */
-    private fun refreshLastMessage(deletedId: String) {
-        chat.child("lastMessage").child("messageId").get().addOnSuccessListener { last ->
-            val pointedAt = last.getValue(String::class.java)
-            if (pointedAt != null && pointedAt != deletedId) return@addOnSuccessListener
-            chat.child("messages").orderByChild("timestamp").limitToLast(1).get().addOnSuccessListener { snapshot ->
-                val newest = snapshot.children.firstOrNull()?.let { parse(it) }
-                if (newest == null) chat.child("lastMessage").removeValue()
-                else chat.child("lastMessage").setValue(mapOf("text" to previewOf(newest), "senderId" to newest.senderId, "timestamp" to newest.timestamp, "messageId" to newest.id))
-            }
-        }
-    }
-
     /**
-     * One code path for both detection methods: a system message "{Name} took a screenshot" in the conversation,
-     * a notification record for the other person, and a push request, all written together.
+     * Screenshot detected: the server adds the system message "{Name} took a screenshot" to this chat and notifies the
+     * other person (notification + FCM push). Queued, so it is not lost offline.
      */
     private fun reportScreenshot() {
         if (!chatReady) return
-        ProfileCache.get(me) { profile ->
-            val text = "${profile.name.substringBefore(" ").ifBlank { "Someone" }} took a screenshot"
-            val messageId = chat.child("messages").push().key ?: return@get
-            val notificationId = FirebaseData.database.getReference("notifications").child(otherUid).push().key ?: return@get
-            val now = mapOf(".sv" to "timestamp")
-            val updates = mutableMapOf<String, Any>(
-                "chats/$chatId/messages/$messageId" to mapOf("messageId" to messageId, "senderId" to me, "text" to text, "type" to "system", "timestamp" to now, "edited" to false),
-                "notifications/$otherUid/$notificationId" to mapOf("senderId" to me, "type" to "screenshot", "chatId" to chatId, "body" to text, "createdAt" to now, "read" to false)
-            )
-            updates += PushQueue.entry(otherUid, me, "screenshot", "Kinnect", "$text of your chat", mapOf("chatId" to chatId))
-            FirebaseData.database.reference.updateChildren(updates)
-                .addOnFailureListener { Toast.makeText(this, it.localizedMessage ?: "Could not report the screenshot", Toast.LENGTH_SHORT).show() }
-        }
+        Backend.call({ ChatRepo.screenshot(otherUid) }) { load(fromServer = false) }
     }
 
     /** Below Android 14 the detector needs gallery access; ask once, with a reason. */
@@ -590,6 +530,7 @@ class ChatActivity : AppCompatActivity() {
         private const val TAKE_PHOTO = 841
         private const val REQUEST_MEDIA = 842
         private const val REQUEST_MIC = 843
+        private const val PICK_FILE = 844
         private const val EDIT_WINDOW_MS = 5 * 60 * 1000L
     }
 
