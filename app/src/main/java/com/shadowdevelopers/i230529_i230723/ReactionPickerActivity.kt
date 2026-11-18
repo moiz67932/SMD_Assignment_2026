@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
@@ -7,14 +8,13 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.google.firebase.auth.FirebaseAuth
 
 /**
  * Reaction picker (05): the post under a dim overlay with the six reactions on top. The current reaction
  * is enlarged with its name above it; tapping it again removes it, tapping another one changes it.
  */
 class ReactionPickerActivity : AppCompatActivity() {
-    private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    private val me by lazy { Backend.uid.orEmpty() }
     private val listeners = ListenerBag()
     private var postId = ""
     private var authorId = ""

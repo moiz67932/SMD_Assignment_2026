@@ -1,15 +1,15 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.app.Activity
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import com.google.firebase.auth.FirebaseAuth
 
 /** Dialogs that let the user choose one or more of their friends (Send story, Groups, Share, Tag...). */
 object FriendPicker {
     /** Loads my friends with their names; answers with (uid, name) pairs, sorted by name. */
     fun load(activity: Activity, onReady: (List<Pair<String, String>>) -> Unit) {
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val me = Backend.uid ?: return
         FirebaseData.friends.child(me).get().addOnSuccessListener { snapshot ->
             val friends = snapshot.children.filter { it.getValue(Boolean::class.java) == true }.mapNotNull { it.key }
             if (friends.isEmpty()) {

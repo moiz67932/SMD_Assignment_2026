@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
@@ -11,7 +12,6 @@ import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.Query
@@ -25,7 +25,7 @@ import com.google.firebase.database.ValueEventListener
  */
 class HomeActivity : AppCompatActivity() {
     private val badges by lazy { TabBadges(this) }
-    private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    private val me by lazy { Backend.uid.orEmpty() }
     private val listeners = ListenerBag()
     /** One live query per author currently in the feed. */
     private val authorQueries = mutableMapOf<String, Pair<Query, ValueEventListener>>()

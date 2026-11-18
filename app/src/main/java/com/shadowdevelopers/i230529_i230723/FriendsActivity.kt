@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.content.Intent
 import android.os.Bundle
 import android.text.SpannableString
@@ -14,7 +15,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.firebase.auth.FirebaseAuth
 
 /** What a row in Friends (14) is: an incoming request, a suggestion, or an existing friend. */
 enum class FriendRowKind { REQUEST, SUGGESTION, FRIEND }
@@ -27,7 +27,7 @@ data class FriendRow(val uid: String, val kind: FriendRowKind, val relation: Rel
  */
 class FriendsActivity : AppCompatActivity() {
     private val badges by lazy { TabBadges(this) }
-    private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    private val me by lazy { Backend.uid.orEmpty() }
     private val listeners = ListenerBag()
     private lateinit var state: FriendState
     private lateinit var requestsAdapter: FriendAdapter
@@ -140,8 +140,12 @@ class FriendsActivity : AppCompatActivity() {
         var left = missing.size
         missing.forEach { uid ->
             friendsOf[uid] = emptySet()
-            FirebaseData.friends.child(uid).get().addOnCompleteListener { task ->
-                if (task.isSuccessful) friendsOf[uid] = task.result.children.filter { it.getValue(Boolean::class.java) == true }.mapNotNull { it.key }.toSet()
+            // GET friends/of.php?id=… (ids only are needed here).
+            Backend.call({
+                val list = Backend.api.get("friends/of.php?id=$uid").getJSONArray("friends")
+                (0 until list.length()).map { list.getJSONObject(it).also(ProfileCache::putJson).getString("id") }.toSet()
+            }) { result ->
+                result.onSuccess { friendsOf[uid] = it }
                 left--
                 if (left == 0) {
                     if (onDone != null) onDone() else render()
@@ -170,10 +174,13 @@ class FriendsActivity : AppCompatActivity() {
                     .map { FriendRow(it.key, FriendRowKind.SUGGESTION, Relation.NONE, mutual = it.value) }
                 render()
             } else {
-                FirebaseData.profiles.limitToFirst(40).get().addOnCompleteListener { task ->
-                    suggestions = if (!task.isSuccessful) emptyList() else task.result.children
-                        .filter { it.key != me && it.child("profileSetupComplete").getValue(Boolean::class.java) == true }
-                        .map { FriendRow(it.key.orEmpty(), FriendRowKind.SUGGESTION, Relation.NONE) }.take(20)
+                // A new user with no friends yet: a few other Kinnect members (server search, everyone).
+                Backend.call({
+                    val list = Backend.api.get("search/users.php?filter=everyone&q=").getJSONArray("users")
+                    (0 until list.length()).map { list.getJSONObject(it).also(ProfileCache::putJson).getString("id") }
+                }) { result ->
+                    suggestions = result.getOrDefault(emptyList()).filter { it != me }
+                        .map { FriendRow(it, FriendRowKind.SUGGESTION, Relation.NONE) }.take(20)
                     render()
                 }
             }

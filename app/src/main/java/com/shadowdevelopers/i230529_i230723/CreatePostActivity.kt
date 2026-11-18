@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
@@ -42,7 +43,7 @@ class CreatePostActivity : AppCompatActivity() {
         textInput = findViewById(R.id.postTextInput)
         findViewById<View>(R.id.backButton).setOnClickListener { finish() }
 
-        FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+        Backend.uid?.let { uid ->
             ProfileCache.get(uid) { profile ->
                 nameShown = profile.name
                 findViewById<TextView>(R.id.createPostName).text = profile.name

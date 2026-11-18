@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -14,7 +15,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 
 /**
@@ -22,7 +22,7 @@ import com.google.firebase.database.DataSnapshot
  * "View N more replies" for the rest), comment likes, photo comments, and the "Replying to … / Cancel" bar.
  */
 class CommentsActivity : AppCompatActivity() {
-    private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    private val me by lazy { Backend.uid.orEmpty() }
     private val listeners = ListenerBag()
     private val headerListeners = ListenerBag()
     private val likeQueries = mutableMapOf<String, Pair<com.google.firebase.database.Query, com.google.firebase.database.ValueEventListener>>()

@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
@@ -8,21 +9,16 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.ValueEventListener
 
 /** Notifications (18): New (unread) and Earlier (read), newest first, 30 at a time. */
 class NotificationsActivity : AppCompatActivity() {
     private val badges by lazy { TabBadges(this) }
-    private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    private val me by lazy { Backend.uid.orEmpty() }
     private val listeners = ListenerBag()
     private lateinit var state: FriendState
     private lateinit var newAdapter: NotificationAdapter
     private lateinit var earlierAdapter: NotificationAdapter
     private var pageSize = PAGE
-    private var notificationsListener: ValueEventListener? = null
-    private var notificationsQuery: com.google.firebase.database.Query? = null
-    private val notifications get() = FirebaseData.database.getReference("notifications").child(me)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,50 +66,38 @@ class NotificationsActivity : AppCompatActivity() {
         badges.start()
         if (me.isBlank()) return
         state.attach(listeners)
-        listenNotifications()
+        // New notifications appear while the screen is open (and after queued changes reach the server).
+        listeners.poll(8_000) { listenNotifications() }
     }
 
     override fun onStop() {
         badges.stop()
         listeners.removeAll()
-        notificationsListener = null
-        notificationsQuery = null
         super.onStop()
     }
 
     private fun listenNotifications() {
-        val previousQuery = notificationsQuery
-        val previous = notificationsListener
-        if (previousQuery != null && previous != null) listeners.remove(previousQuery, previous)
-        val query = notifications.orderByChild("createdAt").limitToLast(pageSize)
-        notificationsQuery = query
-        notificationsListener = listeners.value(query, onError = { Toast.makeText(this, Forms.message(it), Toast.LENGTH_LONG).show() }) { snapshot ->
-            val items = snapshot.children.mapNotNull { item ->
-                val senderId = item.child("senderId").getValue(String::class.java) ?: return@mapNotNull null
-                KinnectNotification(
-                    id = item.key.orEmpty(),
-                    senderId = senderId,
-                    type = item.child("type").getValue(String::class.java).orEmpty(),
-                    body = item.child("body").getValue(String::class.java).orEmpty(),
-                    chatId = item.child("chatId").getValue(String::class.java).orEmpty(),
-                    postId = item.child("postId").getValue(String::class.java).orEmpty(),
-                    createdAt = item.child("createdAt").getValue(Long::class.java) ?: 0L,
-                    read = item.child("read").getValue(Boolean::class.java) == true
-                )
-            }.sortedByDescending { it.createdAt }
-            val newItems = items.filter { !it.read }
-            val earlierItems = items.filter { it.read }
-            newAdapter.setItems(newItems)
-            earlierAdapter.setItems(earlierItems)
-            findViewById<View>(R.id.newNotificationsHeading).visibility = if (newItems.isEmpty()) View.GONE else View.VISIBLE
-            findViewById<View>(R.id.earlierNotificationsHeading).visibility = if (earlierItems.isEmpty()) View.GONE else View.VISIBLE
-            findViewById<View>(R.id.notificationsEmpty).visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
-            findViewById<View>(R.id.olderNotificationsButton).visibility = if (snapshot.childrenCount >= pageSize) View.VISIBLE else View.GONE
+        Inbox.load(onCached = ::show) { result ->
+            result.onSuccess(::show).onFailure {
+                if (newAdapter.itemCount + earlierAdapter.itemCount == 0) Toast.makeText(this, Forms.message(it as? Exception, "Could not load notifications"), Toast.LENGTH_LONG).show()
+            }
         }
     }
 
+    private fun show(all: List<KinnectNotification>) {
+        val items = all.sortedByDescending { it.createdAt }.take(pageSize)
+        val newItems = items.filter { !it.read }
+        val earlierItems = items.filter { it.read }
+        newAdapter.setItems(newItems)
+        earlierAdapter.setItems(earlierItems)
+        findViewById<View>(R.id.newNotificationsHeading).visibility = if (newItems.isEmpty()) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.earlierNotificationsHeading).visibility = if (earlierItems.isEmpty()) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.notificationsEmpty).visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.olderNotificationsButton).visibility = if (all.size > pageSize) View.VISIBLE else View.GONE
+    }
+
     private fun markRead(item: KinnectNotification) {
-        if (!item.read) notifications.child(item.id).child("read").setValue(true)
+        Inbox.markRead(item)
     }
 
     private fun showMore(item: KinnectNotification, anchor: View) {
@@ -121,9 +105,8 @@ class NotificationsActivity : AppCompatActivity() {
             if (!item.read) menu.add(0, 1, 0, "Mark as read")
             menu.add(0, 2, 1, "Remove this notification")
             setOnMenuItemClickListener { option ->
-                if (option.itemId == 1) markRead(item)
-                else notifications.child(item.id).removeValue()
-                    .addOnFailureListener { Toast.makeText(this@NotificationsActivity, it.localizedMessage ?: "Could not remove it", Toast.LENGTH_SHORT).show() }
+                if (option.itemId == 1) markRead(item) else Inbox.remove(item)
+                listenNotifications()
                 true
             }
         }.show()

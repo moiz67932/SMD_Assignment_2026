@@ -36,7 +36,39 @@ class ListenerBag {
         values.remove(query to listener)
     }
 
+    // ----- PHP backend (Assignment 3): polling while the screen is visible -----
+
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val cleanups = mutableListOf<() -> Unit>()
+
+    /**
+     * Runs [block] now and then every [intervalMs] while the screen is visible (until removeAll() in onStop),
+     * and again whenever queued offline actions reach the server. This keeps lists fresh without leaving the screen.
+     */
+    fun poll(intervalMs: Long, block: () -> Unit) {
+        val tick = object : Runnable {
+            override fun run() {
+                block()
+                handler.postDelayed(this, intervalMs)
+            }
+        }
+        handler.post(tick)
+        val synced: () -> Unit = { block() }
+        com.shadowdevelopers.i230529_i230723.data.Backend.onSynced(synced)
+        cleanups.add {
+            handler.removeCallbacks(tick)
+            com.shadowdevelopers.i230529_i230723.data.Backend.removeOnSynced(synced)
+        }
+    }
+
+    /** Anything else to undo in removeAll() (for example an observer of a shared repository). */
+    fun onRemove(cleanup: () -> Unit) {
+        cleanups.add(cleanup)
+    }
+
     fun removeAll() {
+        cleanups.forEach { it() }
+        cleanups.clear()
         values.forEach { (query, listener) -> query.removeEventListener(listener) }
         children.forEach { (query, listener) -> query.removeEventListener(listener) }
         values.clear()

@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -14,7 +15,6 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import com.google.firebase.auth.FirebaseAuth
 import io.agora.rtc2.ChannelMediaOptions
 import io.agora.rtc2.Constants
 import io.agora.rtc2.IRtcEngineEventHandler
@@ -30,7 +30,7 @@ import io.agora.rtc2.video.VideoCanvas
  * Friends are told with a notification when someone goes live; their Home row shows a LIVE tile.
  */
 class LiveActivity : AppCompatActivity() {
-    private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    private val me by lazy { Backend.uid.orEmpty() }
     private val listeners = ListenerBag()
     private val handler = Handler(Looper.getMainLooper())
     private var host = false

@@ -2,64 +2,32 @@ package com.shadowdevelopers.i230529_i230723
 
 import android.content.Context
 import android.widget.Toast
+import com.shadowdevelopers.i230529_i230723.data.Backend
+import org.json.JSONObject
 
 /**
- * Every friend-request change in one place. Each action is a single multi-path update, so both
- * sides of a friendship (and the request indexes) change together or not at all.
- *
- *   friendRequests/{receiver}/{sender} = {senderId, receiverId, createdAt}   incoming requests
- *   sentRequests/{sender}/{receiver}   = createdAt                            outgoing requests ("Requested")
- *   friends/{a}/{b} = true and friends/{b}/{a} = true                         a confirmed friendship
+ * Every friend-request change in one place (Search 13, Friends 14, Other profile 17, Notifications 18).
+ * Each change is shown at once and saved to the SQLite pending_actions queue with a client UUID, then sent to
+ * POST friends/action.php (operation send / cancel / accept / decline / remove). Offline, it waits and syncs
+ * automatically; the server uses the UUID so a retry never creates a second request.
  */
 object FriendActions {
-    private val root get() = FirebaseData.database.reference
-    private val now = mapOf(".sv" to "timestamp")
+    fun sendRequest(context: Context, me: String, other: String) = act(context, other, "send", "requested", "Could not send the request")
+    fun cancelRequest(context: Context, me: String, other: String) = act(context, other, "cancel", "none", "Could not cancel the request")
+    fun confirm(context: Context, me: String, other: String) = act(context, other, "accept", "friends", "Could not confirm the request")
+    fun deleteIncoming(context: Context, me: String, other: String) = act(context, other, "decline", "none", "Could not delete the request")
+    fun unfriend(context: Context, me: String, other: String) = act(context, other, "remove", "none", "Could not remove this friend")
 
-    fun sendRequest(context: Context, me: String, other: String) = run(context, "Could not send the request", mapOf(
-        "friendRequests/$other/$me" to mapOf("senderId" to me, "receiverId" to other, "createdAt" to now),
-        "sentRequests/$me/$other" to now,
-        notification(other, me, "friendRequest", "sent you a friend request"),
-        PushQueue.entry(other, me, "activity", "Kinnect", "sent you a friend request")
-    ))
-
-    fun cancelRequest(context: Context, me: String, other: String) = run(context, "Could not cancel the request", mapOf(
-        "friendRequests/$other/$me" to null,
-        "sentRequests/$me/$other" to null
-    ))
-
-    fun confirm(context: Context, me: String, other: String) = run(context, "Could not confirm the request", mapOf(
-        "friends/$me/$other" to true,
-        "friends/$other/$me" to true,
-        "friendRequests/$me/$other" to null,
-        "sentRequests/$other/$me" to null,
-        notification(other, me, "friendAccepted", "accepted your friend request"),
-        PushQueue.entry(other, me, "activity", "Kinnect", "accepted your friend request")
-    ))
-
-    fun deleteIncoming(context: Context, me: String, other: String) = run(context, "Could not delete the request", mapOf(
-        "friendRequests/$me/$other" to null,
-        "sentRequests/$other/$me" to null
-    ))
-
-    fun unfriend(context: Context, me: String, other: String) = run(context, "Could not remove this friend", mapOf(
-        "friends/$me/$other" to null,
-        "friends/$other/$me" to null
-    ))
-
-    private fun notification(to: String, from: String, type: String, body: String): Pair<String, Any> {
-        val id = FirebaseData.database.getReference("notifications").child(to).push().key.orEmpty()
-        return "notifications/$to/$id" to mapOf("senderId" to from, "type" to type, "body" to body, "createdAt" to now, "read" to false)
-    }
-
-    private fun run(context: Context, error: String, updates: Map<String, Any?>) {
-        // Push delivery is optional: older deployed rules may not yet accept activity pushes.
-        // A rejected push must never roll back the friendship operation and its in-app notification.
-        val action = updates.filterKeys { !it.startsWith("pushQueue/") }
-        val pushes = updates.filterKeys { it.startsWith("pushQueue/") }
-        root.updateChildren(action).addOnSuccessListener {
-            if (pushes.isNotEmpty()) root.updateChildren(pushes)
-        }.addOnFailureListener {
-            Toast.makeText(context, it.localizedMessage ?: error, Toast.LENGTH_LONG).show()
+    private fun act(context: Context, other: String, operation: String, newState: String, error: String) {
+        Friends.applyLocal(other, newState)
+        Friends.markPending(other)
+        val entity = JSONObject().put("other", other).put("state", newState)
+        val payload = JSONObject().put("other_id", other).put("operation", operation)
+        Backend.call({ Backend.enqueue("relation", other, entity, "friend.$operation", payload) }) { result ->
+            result.onFailure {
+                Toast.makeText(context, Forms.message(it as? Exception, error), Toast.LENGTH_LONG).show()
+                Friends.refresh()
+            }
         }
     }
 }

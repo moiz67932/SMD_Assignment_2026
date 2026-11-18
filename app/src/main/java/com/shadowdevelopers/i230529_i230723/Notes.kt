@@ -1,12 +1,12 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.app.Activity
 import android.text.InputFilter
 import android.text.InputType
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import com.google.firebase.auth.FirebaseAuth
 
 /**
  * Notes: a short text (up to 60 characters) that friends can see for 24 hours.
@@ -18,7 +18,7 @@ object Notes {
 
     /** Shows my note and my friends' notes; lets me write, change or delete mine. */
     fun show(activity: Activity) {
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val me = Backend.uid ?: return
         FirebaseData.friends.child(me).get().addOnSuccessListener { friendSnap ->
             val friends = friendSnap.children.filter { it.getValue(Boolean::class.java) == true }.mapNotNull { it.key }
             val authors = listOf(me) + friends

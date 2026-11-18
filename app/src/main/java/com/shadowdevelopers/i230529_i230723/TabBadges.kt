@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.app.Activity
 import android.graphics.Typeface
 import android.view.Gravity
@@ -7,9 +8,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.Query
-import com.google.firebase.database.ValueEventListener
 
 /**
  * Red unread counts on the chat icon (conversations with unread messages) and the notification bell
@@ -17,43 +15,22 @@ import com.google.firebase.database.ValueEventListener
  * The icon is wrapped in a FrameLayout at runtime so the badge can sit on top of it; layouts stay unchanged.
  */
 class TabBadges(private val activity: Activity) {
-    private val me = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    private val me = Backend.uid.orEmpty()
     private val listeners = ListenerBag()
-    private val perChat = mutableMapOf<String, Pair<Query, ValueEventListener>>()
-    private val unreadChats = mutableSetOf<String>()
     private val chatBadge by lazy { badgeFor(R.id.chatsButton, onTab = false) }
     private val bellBadge by lazy { badgeFor(R.id.notificationsTab, onTab = true) }
 
+    /** Polls while the screen is visible: unread notifications (bell) and conversations with unread messages (chat icon). */
     fun start() {
         if (me.isBlank()) return
-        listeners.value(FirebaseData.database.getReference("notifications").child(me).orderByChild("read").equalTo(false)) { snapshot ->
-            show(bellBadge, snapshot.childrenCount.toInt())
-        }
-        listeners.value(FirebaseData.userChats.child(me)) { snapshot ->
-            val ids = snapshot.children.mapNotNull { it.key }.toSet()
-            perChat.keys.filter { it !in ids }.forEach { id -> perChat.remove(id)?.let { (q, l) -> q.removeEventListener(l) }; unreadChats.remove(id) }
-            ids.filter { it !in perChat }.forEach { id ->
-                val query = FirebaseData.database.getReference("chats").child(id).child("unread").child(me)
-                val listener = object : ValueEventListener {
-                    override fun onDataChange(s: com.google.firebase.database.DataSnapshot) {
-                        if ((s.getValue(Int::class.java) ?: 0) > 0) unreadChats.add(id) else unreadChats.remove(id)
-                        show(chatBadge, unreadChats.size)
-                    }
-
-                    override fun onCancelled(error: com.google.firebase.database.DatabaseError) = Unit
-                }
-                query.addValueEventListener(listener)
-                perChat[id] = query to listener
-            }
-            show(chatBadge, unreadChats.size)
+        listeners.poll(10_000) {
+            Inbox.unreadCount { show(bellBadge, it) }
+            Backend.call({ ChatRepo.unreadConversations() }) { result -> result.getOrNull()?.let { show(chatBadge, it) } }
         }
     }
 
     fun stop() {
         listeners.removeAll()
-        perChat.values.forEach { (query, listener) -> query.removeEventListener(listener) }
-        perChat.clear()
-        unreadChats.clear()
     }
 
     private fun show(badge: TextView?, count: Int) {

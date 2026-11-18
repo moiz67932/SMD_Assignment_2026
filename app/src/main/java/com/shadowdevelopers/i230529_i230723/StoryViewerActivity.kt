@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
@@ -9,14 +10,13 @@ import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.google.firebase.auth.FirebaseAuth
 
 /**
  * Story viewer (11). Plays a friend's active stories, then continues with the next friend in "owner_ids".
  * Opening a story writes storyViews/{owner}/{storyId}/{me}; a reply or quick reaction goes to the owner as a chat message.
  */
 class StoryViewerActivity : AppCompatActivity() {
-    private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    private val me by lazy { Backend.uid.orEmpty() }
     private var owners: List<String> = emptyList()
     private var ownerIndex = 0
     private lateinit var player: StoryPlayer

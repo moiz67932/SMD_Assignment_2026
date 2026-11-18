@@ -106,8 +106,28 @@ object Backend {
         return actionId
     }
 
-    /** Schedules the persisted, network-constrained sync job (runs now if online, otherwise when the internet returns). */
+    /**
+     * Sends queued actions: straight away on a background thread when online, and always schedules the persisted,
+     * network-constrained job too, so they still go out after the app is closed or once the internet returns.
+     */
     fun requestSync() {
         runCatching { SyncJobService.schedule(app) }
+        if (online()) io.execute { runCatching { SyncJobService.drain(app) } }
+    }
+
+    // ----- Screens refresh when the server has confirmed queued actions -----
+
+    private val syncedListeners = mutableListOf<() -> Unit>()
+    fun onSynced(listener: () -> Unit) { synchronized(syncedListeners) { syncedListeners.add(listener) } }
+    fun removeOnSynced(listener: () -> Unit) { synchronized(syncedListeners) { syncedListeners.remove(listener) } }
+    internal fun notifySynced() {
+        val copy = synchronized(syncedListeners) { syncedListeners.toList() }
+        main.post { copy.forEach { it() } }
+    }
+
+    /** A queued action the server refused for good (for example an edit after 5 minutes): tell the user. */
+    internal fun reportRejected(operation: String, message: String) {
+        main.post { android.widget.Toast.makeText(app, message, android.widget.Toast.LENGTH_LONG).show() }
+        notifySynced()
     }
 }

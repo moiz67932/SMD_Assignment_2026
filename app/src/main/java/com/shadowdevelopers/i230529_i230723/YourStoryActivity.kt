@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
@@ -10,14 +11,13 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.Query
 import com.google.firebase.database.ValueEventListener
 
 /** Your story (12): my active stories, who has seen each one ("Seen by N"), hearts for Love reactions, delete. */
 class YourStoryActivity : AppCompatActivity() {
-    private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    private val me by lazy { Backend.uid.orEmpty() }
     private val listeners = ListenerBag()
     private var storyListeners = mutableListOf<Pair<Query, ValueEventListener>>()
     private val byAudience = mutableMapOf<String, List<Story>>()

@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -13,7 +14,6 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.ChildEventListener
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
@@ -36,7 +36,7 @@ class KinnectBackgroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        val uid = Backend.uid
         if (uid == null) {
             // Logged out (for example the system restarted this service after a logout).
             stopSelf()
@@ -130,7 +130,7 @@ class KinnectBackgroundService : Service() {
 
         /** Starts (or keeps) the background listener. Call only while the user is signed in and Kinnect is on screen. */
         fun start(context: Context) {
-            if (FirebaseAuth.getInstance().currentUser == null) return
+            if (Backend.uid == null) return
             try {
                 ContextCompat.startForegroundService(context, Intent(context, KinnectBackgroundService::class.java))
             } catch (_: Exception) {

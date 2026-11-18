@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -17,8 +18,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.DataSnapshot
 
 /**
  * Search (13). Finds people by username, full name, first name or last name while typing.
@@ -28,7 +27,7 @@ import com.google.firebase.database.DataSnapshot
  * "generation" makes sure an older, slower query can never overwrite the results of a newer one.
  */
 class SearchActivity : AppCompatActivity() {
-    private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    private val me by lazy { Backend.uid.orEmpty() }
     private val listeners = ListenerBag()
     private lateinit var state: FriendState
     private lateinit var adapter: UserSearchAdapter
@@ -37,6 +36,8 @@ class SearchActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var generation = 0
     private var chip = CHIP_ALL
+    /** Search among everyone, only my friends, or only people with a pending request (Assignment 3 filter). */
+    private var relationFilter = "everyone"
     private var marketItems: List<MarketItem>? = null
     private val runSearch = Runnable { search(input.text.toString()) }
 
@@ -77,6 +78,8 @@ class SearchActivity : AppCompatActivity() {
         Forms.onKeyboardAction(input) { Forms.hideKeyboard(this) }
         mapOf(R.id.chipAll to CHIP_ALL, R.id.chipPeople to CHIP_PEOPLE, R.id.chipPosts to CHIP_POSTS, R.id.chipGroups to CHIP_GROUPS, R.id.chipMarketplace to CHIP_MARKET)
             .forEach { (id, value) -> findViewById<View>(id).setOnClickListener { chip = value; styleChips(); search(input.text.toString()) } }
+        mapOf(R.id.filterEveryone to "everyone", R.id.filterFriends to "friends", R.id.filterRequests to "requests")
+            .forEach { (id, value) -> findViewById<View>(id).setOnClickListener { relationFilter = value; styleChips(); search(input.text.toString()) } }
         styleChips()
         search("")
     }
@@ -98,12 +101,17 @@ class SearchActivity : AppCompatActivity() {
 
     private fun styleChips() {
         mapOf(R.id.chipAll to CHIP_ALL, R.id.chipPeople to CHIP_PEOPLE, R.id.chipPosts to CHIP_POSTS, R.id.chipGroups to CHIP_GROUPS, R.id.chipMarketplace to CHIP_MARKET)
-            .forEach { (id, value) ->
-                findViewById<TextView>(id).apply {
-                    setBackgroundResource(if (chip == value) R.drawable.rounded_teal_soft else R.drawable.rounded_soft)
-                    setTextColor(ContextCompat.getColor(this@SearchActivity, if (chip == value) R.color.primary else R.color.text_primary))
-                }
-            }
+            .forEach { (id, value) -> styleChip(id, chip == value) }
+        mapOf(R.id.filterEveryone to "everyone", R.id.filterFriends to "friends", R.id.filterRequests to "requests")
+            .forEach { (id, value) -> styleChip(id, relationFilter == value) }
+        findViewById<View>(R.id.searchRelationFilter).visibility = if (chip == CHIP_ALL || chip == CHIP_PEOPLE) View.VISIBLE else View.GONE
+    }
+
+    private fun styleChip(id: Int, selected: Boolean) {
+        findViewById<TextView>(id).apply {
+            setBackgroundResource(if (selected) R.drawable.rounded_teal_soft else R.drawable.rounded_soft)
+            setTextColor(ContextCompat.getColor(this@SearchActivity, if (selected) R.color.primary else R.color.text_primary))
+        }
     }
 
     /** Plain rows (a title and a line of text) for post and group results. */
@@ -116,7 +124,7 @@ class SearchActivity : AppCompatActivity() {
 
     /** Groups: only groups I am in (userGroups/{me}), by name. */
     private fun searchGroups(term: String, run: Int) {
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val me = Backend.uid ?: return
         FirebaseData.database.getReference("userGroups").child(me).get().addOnSuccessListener { snapshot ->
             if (run != generation) return@addOnSuccessListener
             val rows = snapshot.children.map { TextRow(it.key.orEmpty(), it.child("name").getValue(String::class.java) ?: "Group", "Tap to open the chat") }
@@ -128,7 +136,7 @@ class SearchActivity : AppCompatActivity() {
 
     /** Posts: text of my posts and my friends' posts (their latest 30 each). */
     private fun searchPosts(term: String, run: Int) {
-        val me = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val me = Backend.uid ?: return
         FirebaseData.friends.child(me).get().addOnSuccessListener { friends ->
             val authors = listOf(me) + friends.children.filter { it.getValue(Boolean::class.java) == true }.mapNotNull { it.key }
             val found = mutableListOf<FeedPost>()
@@ -152,7 +160,7 @@ class SearchActivity : AppCompatActivity() {
         val run = ++generation
         val title = findViewById<TextView>(R.id.searchSectionTitle)
         val recycler = findViewById<RecyclerView>(R.id.searchResults)
-        if (term.isBlank()) {
+        if (term.isBlank() && (relationFilter == "everyone" || chip !in listOf(CHIP_ALL, CHIP_PEOPLE))) {
             title.text = "Recent searches"
             adapter.setUsers(emptyList())
             showRecent()
@@ -179,42 +187,50 @@ class SearchActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * People search as you type: GET search/users.php?q=…&filter=everyone|friends|requests (name or username).
+     * Results are saved to SQLite, so searching offline still finds people seen before.
+     */
     private fun searchPeople(term: String, run: Int) {
         showEmpty("Searching…")
-        val found = linkedMapOf<String, SearchUser>()
-        var pending = FIELDS.size
-        FIELDS.forEach { field ->
-            FirebaseData.profiles.orderByChild(field).startAt(term).endAt(term + "").limitToFirst(20).get()
-                .addOnCompleteListener { task ->
-                    if (run != generation) return@addOnCompleteListener // a newer search started: ignore this result
-                    if (task.isSuccessful) {
-                        task.result.children.forEach { profile -> toUser(profile)?.let { found[it.uid] = it } }
-                    }
-                    pending--
-                    if (pending == 0) {
-                        // Usernames that start with the term first, then names.
-                        val users = found.values.sortedWith(compareBy({ !it.username.startsWith(term) }, { it.name.lowercase() }))
-                        adapter.setUsers(users)
-                        showEmpty(if (users.isEmpty()) "No people found for \"$term\"" else null)
-                        if (!task.isSuccessful && users.isEmpty()) showEmpty(task.exception?.localizedMessage ?: "Search failed")
-                    }
-                }
+        val filter = relationFilter
+        Backend.call({
+            val response = Backend.api.get("search/users.php?filter=$filter&q=" + java.net.URLEncoder.encode(term, "UTF-8"))
+            val list = response.getJSONArray("users")
+            (0 until list.length()).map { list.getJSONObject(it) }
+        }) { result ->
+            if (run != generation) return@call // a newer search started: ignore this result
+            result.onSuccess { rows ->
+                rows.forEach { ProfileCache.putJson(it) }
+                val users = rows.map(::toUser).sortedWith(compareBy({ !it.username.startsWith(term) }, { it.name.lowercase() }))
+                adapter.setUsers(users)
+                showEmpty(if (users.isEmpty()) "No people found for \"$term\"" else null)
+            }.onFailure { searchOffline(term, run) }
         }
     }
 
-    private fun toUser(profile: DataSnapshot): SearchUser? {
-        val uid = profile.child("uid").getValue(String::class.java) ?: profile.key ?: return null
-        if (uid == me || profile.child("profileSetupComplete").getValue(Boolean::class.java) != true) return null
-        return SearchUser(
-            uid,
-            profile.child("name").getValue(String::class.java).orEmpty(),
-            profile.child("username").getValue(String::class.java).orEmpty(),
-            profile.child("bio").getValue(String::class.java).orEmpty(),
-            profile.child("photo").getValue(String::class.java).orEmpty()
-        )
+    /** Offline: filter the profiles cached in SQLite (and my friend/request lists) on the phone. */
+    private fun searchOffline(term: String, run: Int) {
+        val filter = relationFilter
+        Backend.call({ Backend.store.entities(me, "user").map { org.json.JSONObject(it) } }) { result ->
+            if (run != generation) return@call
+            val users = result.getOrDefault(emptyList()).map(::toUser).filter { user ->
+                user.uid != me && (user.name.lowercase().contains(term) || user.username.lowercase().contains(term)) && when (filter) {
+                    "friends" -> state.relation(user.uid) == Relation.FRIENDS
+                    "requests" -> state.relation(user.uid).let { it == Relation.INCOMING || it == Relation.OUTGOING }
+                    else -> true
+                }
+            }
+            adapter.setUsers(users)
+            showEmpty(if (users.isEmpty()) "You're offline. No saved people match \"$term\"" else "You're offline: showing people saved on this phone")
+        }
     }
 
-    /** Marketplace: the newest 100 items are read once and filtered on the phone by title. */
+    private fun toUser(json: org.json.JSONObject): SearchUser {
+        val profile = ProfileCache.fromJson(json)
+        return SearchUser(profile.uid, profile.name, profile.username, profile.bio, profile.photo)
+    }
+
     private fun searchMarketplace(term: String, run: Int) {
         val cached = marketItems
         if (cached != null) {
@@ -290,7 +306,6 @@ class SearchActivity : AppCompatActivity() {
     }
 
     companion object {
-        private val FIELDS = listOf("usernameLower", "nameLower", "firstNameLower", "lastNameLower")
         private const val CHIP_ALL = 0
         private const val CHIP_PEOPLE = 1
         private const val CHIP_POSTS = 2

@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
@@ -8,11 +9,10 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.firebase.auth.FirebaseAuth
 
 /** Profile (15): the signed-in user's own profile, cover, details, friends and posts. */
 class ProfileActivity : AppCompatActivity() {
-    private val uid by lazy { FirebaseAuth.getInstance().currentUser?.uid }
+    private val uid by lazy { Backend.uid }
     private val friendCardIds = listOf(R.id.profileFriend1, R.id.profileFriend2, R.id.profileFriend3)
     private val listeners = ListenerBag()
     private lateinit var postAdapter: PostAdapter
@@ -77,45 +77,9 @@ class ProfileActivity : AppCompatActivity() {
         super.onStart()
         val userId = uid ?: return
         postAdapter.resume()
-        // Private details (birthday, gender, join date) live in users/{uid}; photo and cover in profiles/{uid}.
-        listeners.value(FirebaseData.users.child(userId)) { snapshot ->
-            val name = snapshot.child("name").getValue(String::class.java).orEmpty()
-            findViewById<TextView>(R.id.profileToolbarName).text = name
-            findViewById<TextView>(R.id.profileDisplayName).text = name
-            findViewById<TextView>(R.id.profileDisplayBio).text = snapshot.child("bio").getValue(String::class.java).orEmpty()
-            val birthday = snapshot.child("birthday").getValue(String::class.java).orEmpty()
-            val gender = snapshot.child("gender").getValue(String::class.java).orEmpty()
-            val createdAt = snapshot.child("createdAt").getValue(Long::class.java) ?: 0L
-            findViewById<TextView>(R.id.profileBirthdayValue).text = birthday
-            findViewById<View>(R.id.profileBirthdayRow).visibility = if (birthday.isBlank()) View.GONE else View.VISIBLE
-            findViewById<TextView>(R.id.profileGenderValue).text = gender
-            findViewById<View>(R.id.profileGenderRow).visibility = if (gender.isBlank()) View.GONE else View.VISIBLE
-            findViewById<View>(R.id.profileLocationRow).visibility = View.GONE
-            findViewById<TextView>(R.id.profileJoinedValue).text = if (createdAt > 0L) "Joined ${android.text.format.DateFormat.format("MMMM yyyy", createdAt)}" else ""
-            findViewById<View>(R.id.profileJoinedRow).visibility = if (createdAt > 0L) View.VISIBLE else View.GONE
-        }
-        listeners.value(FirebaseData.profiles.child(userId)) { snapshot ->
-            val profile = ProfileCache.from(snapshot)
-            ProfileCache.put(profile)
-            AvatarBinder.bind(findViewById(R.id.profileAvatar), profile.name, profile.photo)
-            val cover = findViewById<ImageView>(R.id.profileCoverImage)
-            if (profile.cover.isBlank()) cover.setImageDrawable(null) else MediaLoader.load(cover, profile.cover)
-        }
-        listeners.value(FirebaseData.friends.child(userId)) { snapshot ->
-            val friends = snapshot.children.filter { it.getValue(Boolean::class.java) == true }.mapNotNull { it.key }
-            val label = if (friends.size == 1) "1 friend" else "${friends.size} friends"
-            findViewById<TextView>(R.id.profileFriendCount).text = label
-            findViewById<TextView>(R.id.profileFriendsCountBottom).text = label
-            friendCardIds.forEachIndexed { index, viewId ->
-                val card = findViewById<TextView>(viewId)
-                val friendUid = friends.getOrNull(index)
-                card.visibility = if (friendUid == null) View.INVISIBLE else View.VISIBLE
-                if (friendUid != null) {
-                    card.setOnClickListener { startActivity(Intent(this, OtherProfileActivity::class.java).putExtra("person_uid", friendUid)) }
-                    ProfileCache.get(friendUid) { AvatarBinder.bind(card, it.name, it.photo, cornerRadiusDp = 10f) }
-                }
-            }
-        }
+        // My profile (GET profiles/get.php: birthday, gender and join date are returned only to me) and my friends
+        // (GET friends/of.php), both shown from SQLite first so the screen works offline.
+        listeners.poll(15_000) { loadProfile(userId) }
         listeners.value(FirebaseData.posts.orderByChild("authorId").equalTo(userId)) { snapshot ->
             allPosts = snapshot.children.map { FeedPost.from(it) }.sortedByDescending { it.createdAt }
             selectTab(tab)
@@ -159,6 +123,59 @@ class ProfileActivity : AppCompatActivity() {
                 postAdapter.setPosts(posts)
                 empty.text = if (name == "Photos") "No photos yet" else "No posts yet"
                 empty.visibility = if (posts.isEmpty()) View.VISIBLE else View.GONE
+            }
+        }
+    }
+
+    private fun loadProfile(userId: String) {
+        Backend.call({
+            val user = runCatching { Backend.api.get("profiles/get.php").getJSONObject("user") }
+                .onSuccess { Backend.store.putEntity(userId, "user", userId, it.toString()) }
+                .getOrElse { Backend.store.entity(userId, "user", userId)?.let { org.json.JSONObject(it) } }
+            val friends = runCatching { Backend.api.get("friends/of.php?id=$userId").getJSONArray("friends") }
+                .onSuccess { Backend.store.putEntity(userId, "friends_of", userId, it.toString()) }
+                .getOrElse { Backend.store.entity(userId, "friends_of", userId)?.let { org.json.JSONArray(it) } }
+            user to friends
+        }) { result ->
+            val (user, friends) = result.getOrNull() ?: return@call
+            if (user != null) showDetails(user)
+            if (friends != null) showFriends((0 until friends.length()).map { friends.getJSONObject(it).also(ProfileCache::putJson).getString("id") })
+        }
+    }
+
+    private fun showDetails(user: org.json.JSONObject) {
+        fun text(key: String) = user.optString(key).takeUnless { it == "null" }.orEmpty()
+        val profile = ProfileCache.fromJson(user)
+        ProfileCache.put(profile)
+        findViewById<TextView>(R.id.profileToolbarName).text = profile.name
+        findViewById<TextView>(R.id.profileDisplayName).text = profile.name
+        findViewById<TextView>(R.id.profileDisplayBio).text = profile.bio
+        val birthday = text("birthday")
+        val gender = text("gender")
+        val createdAt = TimeFormat.parse(text("created_at"))
+        findViewById<TextView>(R.id.profileBirthdayValue).text = birthday
+        findViewById<View>(R.id.profileBirthdayRow).visibility = if (birthday.isBlank()) View.GONE else View.VISIBLE
+        findViewById<TextView>(R.id.profileGenderValue).text = gender
+        findViewById<View>(R.id.profileGenderRow).visibility = if (gender.isBlank()) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.profileLocationRow).visibility = View.GONE
+        findViewById<TextView>(R.id.profileJoinedValue).text = if (createdAt > 0L) "Joined ${android.text.format.DateFormat.format("MMMM yyyy", createdAt)}" else ""
+        findViewById<View>(R.id.profileJoinedRow).visibility = if (createdAt > 0L) View.VISIBLE else View.GONE
+        AvatarBinder.bind(findViewById(R.id.profileAvatar), profile.name, profile.photo)
+        val cover = findViewById<ImageView>(R.id.profileCoverImage)
+        if (profile.cover.isBlank()) cover.setImageDrawable(null) else MediaLoader.load(cover, profile.cover)
+    }
+
+    private fun showFriends(friends: List<String>) {
+        val label = if (friends.size == 1) "1 friend" else "${friends.size} friends"
+        findViewById<TextView>(R.id.profileFriendCount).text = label
+        findViewById<TextView>(R.id.profileFriendsCountBottom).text = label
+        friendCardIds.forEachIndexed { index, viewId ->
+            val card = findViewById<TextView>(viewId)
+            val friendUid = friends.getOrNull(index)
+            card.visibility = if (friendUid == null) View.INVISIBLE else View.VISIBLE
+            if (friendUid != null) {
+                card.setOnClickListener { startActivity(Intent(this, OtherProfileActivity::class.java).putExtra("person_uid", friendUid)) }
+                ProfileCache.get(friendUid) { AvatarBinder.bind(card, it.name, it.photo, cornerRadiusDp = 10f) }
             }
         }
     }

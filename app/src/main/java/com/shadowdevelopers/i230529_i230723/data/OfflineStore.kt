@@ -66,6 +66,26 @@ class OfflineStore(context: Context) : SQLiteOpenHelper(context, "kinnect_offlin
             put("lease_until", 0); put("next_attempt_at", retryAt ?: 0)
         }, "account_id=? AND action_uuid=?", arrayOf(action.account, action.uuid))
     }
+    /** A permanently rejected action is removed from the queue (its optimistic copy is rolled back by the next refresh). */
+    @Synchronized fun dropFailed(action: Action) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete("pending_actions", "account_id=? AND action_uuid=?", arrayOf(action.account, action.uuid))
+            db.execSQL("DELETE FROM entities WHERE account_id=? AND id=? AND pending=1 AND NOT EXISTS (SELECT 1 FROM pending_actions WHERE account_id=? AND entity_id=?)",
+                arrayOf(action.account, action.entityId, action.account, action.entityId))
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+    }
+
+    /** How many of my actions are still waiting to reach the server (shown as "pending"). */
+    fun pendingCount(account: String): Int = readableDatabase.rawQuery("SELECT COUNT(*) FROM pending_actions WHERE account_id=?", arrayOf(account)).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+
+    /** Ids of entities that still have a queued action (drawn with the "pending" look). */
+    fun pendingEntityIds(account: String): Set<String> = readableDatabase.rawQuery("SELECT DISTINCT entity_id FROM pending_actions WHERE account_id=?", arrayOf(account)).use { c ->
+        buildSet { while (c.moveToNext()) add(c.getString(0)) }
+    }
+
     fun hasRetryableActions(account: String): Boolean = readableDatabase.rawQuery("SELECT 1 FROM pending_actions WHERE account_id=? AND state<>'failed' LIMIT 1",arrayOf(account)).use { it.moveToFirst() }
     fun entities(account: String, kind: String): List<String> = readableDatabase.rawQuery("SELECT json FROM entities WHERE account_id=? AND kind=? ORDER BY rowid", arrayOf(account,kind)).use { c ->
         buildList { while (c.moveToNext()) add(c.getString(0)) }

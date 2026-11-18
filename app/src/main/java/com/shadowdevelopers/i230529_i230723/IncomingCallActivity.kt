@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.content.Intent
 import android.media.Ringtone
 import android.media.RingtoneManager
@@ -13,7 +14,6 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.google.firebase.auth.FirebaseAuth
 
 /**
  * Incoming call (new screen, Voice call style). Rings and vibrates for up to 30 s.
@@ -21,7 +21,7 @@ import com.google.firebase.auth.FirebaseAuth
  * no answer -> "missed". Closes by itself if the caller hangs up first.
  */
 class IncomingCallActivity : AppCompatActivity() {
-    private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    private val me by lazy { Backend.uid.orEmpty() }
     private val listeners = ListenerBag()
     private val handler = Handler(Looper.getMainLooper())
     private var ringtone: Ringtone? = null

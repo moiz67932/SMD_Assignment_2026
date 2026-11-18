@@ -1,11 +1,11 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.app.Activity
 import android.content.Intent
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
-import com.google.firebase.auth.FirebaseAuth
 
 /**
  * Back-stack rules (so Back never walks through every screen that was visited):
@@ -63,7 +63,7 @@ object Nav {
         if (activity !is ComponentActivity || activity.javaClass in OWN_BACK) return
         activity.onBackPressedDispatcher.addCallback(activity, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (activity.isTaskRoot && FirebaseAuth.getInstance().currentUser != null) {
+                if (activity.isTaskRoot && Backend.uid != null) {
                     activity.startActivity(Intent(activity, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
                     activity.finish()
                 } else {

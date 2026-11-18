@@ -135,6 +135,49 @@
 
     </HorizontalScrollView>
 
+    <!-- People filter (Assignment 3): who to search among. Shown for All and People. -->
+    <LinearLayout
+        android:id="@+id/searchRelationFilter"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="12dp">
+
+            <TextView
+                android:id="@+id/filterEveryone"
+                style="@style/Heading"
+                android:layout_width="76dp"
+                android:layout_height="30dp"
+                android:background="@drawable/rounded_teal_soft"
+                android:gravity="center"
+                android:text="Everyone"
+                android:textColor="@color/primary"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/filterFriends"
+                style="@style/Heading"
+                android:layout_width="66dp"
+                android:layout_height="30dp"
+                android:layout_marginStart="7dp"
+                android:background="@drawable/rounded_soft"
+                android:gravity="center"
+                android:text="Friends"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/filterRequests"
+                style="@style/Heading"
+                android:layout_width="74dp"
+                android:layout_height="30dp"
+                android:layout_marginStart="7dp"
+                android:background="@drawable/rounded_soft"
+                android:gravity="center"
+                android:text="Requests"
+                android:textSize="11sp" />
+
+    </LinearLayout>
+
 
     <TextView
         android:id="@+id/searchSectionTitle"

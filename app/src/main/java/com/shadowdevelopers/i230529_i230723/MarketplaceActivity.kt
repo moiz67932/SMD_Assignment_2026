@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.content.Intent
 import android.os.Bundle
 import android.text.InputType
@@ -14,7 +15,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.Query
 import com.google.firebase.database.ValueEventListener
@@ -85,7 +85,7 @@ class MarketplaceActivity : AppCompatActivity() {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val itemName = title.text.toString().trim()
                 val itemPrice = price.text.toString().trim()
-                val uid = FirebaseAuth.getInstance().currentUser?.uid
+                val uid = Backend.uid
                 if (uid == null || itemName.isBlank() || itemPrice.isBlank()) {
                     Toast.makeText(this, "Enter an item name and price while signed in", Toast.LENGTH_SHORT).show()
                     return@setOnClickListener

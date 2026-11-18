@@ -1,5 +1,7 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
+import org.json.JSONObject
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
@@ -9,11 +11,10 @@ import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import com.google.firebase.auth.FirebaseAuth
 
 /** Other profile (17): another user's cover, bio, friend count, mutual friends, photos and the friend button. */
 class OtherProfileActivity : AppCompatActivity() {
-    private val currentUid by lazy { FirebaseAuth.getInstance().currentUser?.uid }
+    private val currentUid by lazy { Backend.uid }
     private val listeners = ListenerBag()
     private val mutualAvatarIds = listOf(R.id.mutualAvatar1, R.id.mutualAvatar2, R.id.mutualAvatar3)
     private val photoIds = listOf(R.id.otherPhoto1, R.id.otherPhoto2, R.id.otherPhoto3)
@@ -58,39 +59,61 @@ class OtherProfileActivity : AppCompatActivity() {
         super.onStart()
         val uid = currentUid ?: return
         if (personUid.isBlank() || personUid == uid) return
-        listeners.value(FirebaseData.profiles.child(personUid)) { snapshot ->
-            val profile = ProfileCache.from(snapshot)
-            ProfileCache.put(profile)
-            personName = profile.name
-            findViewById<TextView>(R.id.otherToolbarName).text = profile.name
-            findViewById<TextView>(R.id.otherProfileName).text = profile.name
-            findViewById<TextView>(R.id.otherProfileBio).apply {
-                text = profile.bio
-                visibility = if (profile.bio.isBlank()) View.GONE else View.VISIBLE
-            }
-            AvatarBinder.bind(findViewById(R.id.otherProfileAvatar), profile.name, profile.photo)
-            val cover = findViewById<ImageView>(R.id.otherCoverImage)
-            if (profile.cover.isBlank()) cover.setImageDrawable(null) else MediaLoader.load(cover, profile.cover)
-        }
-        listeners.value(FirebaseData.friends.child(personUid)) { snapshot ->
-            otherFriends.clear()
-            snapshot.children.forEach { if (it.getValue(Boolean::class.java) == true) otherFriends.add(it.key.orEmpty()) }
-            showMutualFriends()
-        }
-        // My friends + incoming/outgoing requests, live: drives the friend button and the mutual count.
+        // My friends + incoming/outgoing requests (server, polled): drives the friend button and the mutual count.
         state?.attach(listeners)
-        // Photos: the images from this person's latest posts (posts are readable by any signed-in user).
-        listeners.value(FirebaseData.posts.orderByChild("authorId").equalTo(personUid).limitToLast(30)) { snapshot ->
-            val images = snapshot.children.sortedByDescending { it.child("createdAt").getValue(Long::class.java) ?: 0L }
-                .flatMap { post -> post.child("images").children.mapNotNull { it.getValue(String::class.java) } }
-            photoIds.forEachIndexed { index, id ->
-                val view = findViewById<ImageView>(id)
-                val ref = images.getOrNull(index)
-                view.visibility = if (ref == null) View.INVISIBLE else View.VISIBLE
-                if (ref != null) MediaLoader.load(view, ref)
+        // Profile, friend count and photos from the PHP API; shown from SQLite first so it also works offline.
+        listeners.poll(15_000) { loadProfile() }
+    }
+
+    private fun loadProfile() {
+        val me = currentUid ?: return
+        Backend.call({
+            val user = runCatching { Backend.api.get("profiles/get.php?id=$personUid").getJSONObject("user") }
+                .onSuccess { Backend.store.putEntity(me, "user", personUid, it.toString()) }
+                .getOrElse { Backend.store.entity(me, "user", personUid)?.let(::JSONObject) }
+            val friends = runCatching {
+                val list = Backend.api.get("friends/of.php?id=$personUid").getJSONArray("friends")
+                (0 until list.length()).map { list.getJSONObject(it).also(ProfileCache::putJson).getString("id") }
+            }.getOrNull()
+            val images = runCatching {
+                val posts = Backend.api.get("posts/feed.php?author=$personUid").getJSONArray("posts")
+                (0 until posts.length()).flatMap { i ->
+                    val media = posts.getJSONObject(i).optJSONArray("media") ?: org.json.JSONArray()
+                    (0 until media.length()).map { ProfileCache.mediaRef(media.getJSONObject(it).getString("id")) }
+                }
+            }.getOrNull()
+            Triple(user, friends, images)
+        }) { result ->
+            val (user, friends, images) = result.getOrNull() ?: return@call
+            if (user != null) {
+                val profile = ProfileCache.fromJson(user)
+                ProfileCache.put(profile)
+                personName = profile.name
+                findViewById<TextView>(R.id.otherToolbarName).text = profile.name
+                findViewById<TextView>(R.id.otherProfileName).text = profile.name
+                findViewById<TextView>(R.id.otherProfileBio).apply {
+                    text = profile.bio
+                    visibility = if (profile.bio.isBlank()) View.GONE else View.VISIBLE
+                }
+                AvatarBinder.bind(findViewById(R.id.otherProfileAvatar), profile.name, profile.photo)
+                val cover = findViewById<ImageView>(R.id.otherCoverImage)
+                if (profile.cover.isBlank()) cover.setImageDrawable(null) else MediaLoader.load(cover, profile.cover)
             }
-            findViewById<View>(R.id.otherPhotosGrid).visibility = if (images.isEmpty()) View.GONE else View.VISIBLE
-            findViewById<View>(R.id.otherPhotosEmpty).visibility = if (images.isEmpty()) View.VISIBLE else View.GONE
+            if (friends != null) {
+                otherFriends.clear()
+                otherFriends.addAll(friends)
+                showMutualFriends()
+            }
+            if (images != null) {
+                photoIds.forEachIndexed { index, id ->
+                    val view = findViewById<ImageView>(id)
+                    val ref = images.getOrNull(index)
+                    view.visibility = if (ref == null) View.INVISIBLE else View.VISIBLE
+                    if (ref != null) MediaLoader.load(view, ref)
+                }
+                findViewById<View>(R.id.otherPhotosGrid).visibility = if (images.isEmpty()) View.GONE else View.VISIBLE
+                findViewById<View>(R.id.otherPhotosEmpty).visibility = if (images.isEmpty()) View.VISIBLE else View.GONE
+            }
         }
     }
 
@@ -141,7 +164,7 @@ class OtherProfileActivity : AppCompatActivity() {
 
     /** Add friend -> Requested -> Friends, live. An incoming request shows Confirm (Delete is in the ... menu). */
     private fun updateFriendActionLabel() {
-        actionLabel.text = FriendState.label(relation())
+        actionLabel.text = state?.labelFor(personUid) ?: FriendState.label(relation())
     }
 
     private fun performFriendAction() {

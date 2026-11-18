@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
@@ -15,7 +16,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.firebase.auth.FirebaseAuth
 
 /**
  * One list screen for the Menu shortcuts. Extra "mode":
@@ -25,7 +25,7 @@ import com.google.firebase.auth.FirebaseAuth
  *   events   - posts with an event from me and my friends
  */
 class SimpleListActivity : AppCompatActivity() {
-    private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    private val me by lazy { Backend.uid.orEmpty() }
     private val listeners = ListenerBag()
     private val mode by lazy { intent.getStringExtra("mode") ?: "groups" }
     private lateinit var adapter: TextRowAdapter

@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.graphics.Typeface
 import android.os.Bundle
 import android.view.Gravity
@@ -12,13 +13,12 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.firebase.auth.FirebaseAuth
 
 /** Group chat: text messages for every member. groupMessages/{groupId}/{messageId} = {senderId, senderName, text, timestamp}. */
 class GroupChatActivity : AppCompatActivity() {
     private data class Line(val id: String, val sender: String, val senderName: String, val text: String)
 
-    private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    private val me by lazy { Backend.uid.orEmpty() }
     private val groupId by lazy { intent.getStringExtra("group_id").orEmpty() }
     private val listeners = ListenerBag()
     private val lines = mutableListOf<Line>()

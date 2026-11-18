@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
@@ -13,11 +14,10 @@ class MenuActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_menu)
 
-        FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
-            FirebaseData.profiles.child(uid).get().addOnSuccessListener { profile ->
-                val name = profile.child("name").getValue(String::class.java).orEmpty()
-                findViewById<TextView>(R.id.menuProfileName).text = name
-                AvatarBinder.bind(findViewById(R.id.menuProfileAvatar), name, profile.child("photo").getValue(String::class.java))
+        Backend.uid?.let { uid ->
+            ProfileCache.get(uid) { profile ->
+                findViewById<TextView>(R.id.menuProfileName).text = profile.name
+                AvatarBinder.bind(findViewById(R.id.menuProfileAvatar), profile.name, profile.photo)
             }
         }
 

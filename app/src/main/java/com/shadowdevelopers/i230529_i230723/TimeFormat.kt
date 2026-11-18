@@ -8,6 +8,23 @@ import java.util.Locale
 
 /** One place for every timestamp shown in the app: "now", "5m", "2h", "Yesterday", "12 Oct". */
 object TimeFormat {
+    /**
+     * Server times (MySQL DATETIME(6) in UTC, for example "2026-11-18 16:23:52.123456", or ISO-8601) to epoch millis.
+     * Returns 0 for empty or unreadable values.
+     */
+    fun parse(value: String?): Long {
+        if (value.isNullOrBlank() || value == "null") return 0L
+        val text = value.trim().replace('T', ' ').removeSuffix("Z").substringBefore('+')
+        val main = text.substringBefore('.')
+        val fraction = text.substringAfter('.', "").padEnd(3, '0').take(3)
+        return try {
+            val format = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+            (format.parse(main)?.time ?: 0L) + (fraction.toLongOrNull() ?: 0L)
+        } catch (_: Exception) {
+            0L
+        }
+    }
+
     fun ago(time: Long): String {
         if (time <= 0L) return "now"
         val diff = (FirebaseData.now() - time).coerceAtLeast(0)

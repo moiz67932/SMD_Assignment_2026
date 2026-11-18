@@ -46,7 +46,7 @@ class UserSearchAdapter(
             ).joinToString(" · ").ifBlank { user.bio }
             AvatarBinder.bind(avatar, user.name, user.photo)
             itemView.setOnClickListener { onOpen(user) }
-            action.text = FriendState.label(relation)
+            action.text = FriendState.label(relation) + if (user.uid in Friends.pending) " · pending" else ""
             // Teal for an action you can take, light grey once you are friends or the request is pending.
             val filled = relation == Relation.NONE || relation == Relation.INCOMING
             action.setBackgroundResource(if (filled) R.drawable.rounded_teal else R.drawable.rounded_light)

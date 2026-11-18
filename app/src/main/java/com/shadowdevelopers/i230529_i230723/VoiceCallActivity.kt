@@ -1,5 +1,6 @@
 package com.shadowdevelopers.i230529_i230723
 
+import com.shadowdevelopers.i230529_i230723.data.Backend
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -14,7 +15,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import com.google.firebase.auth.FirebaseAuth
 import io.agora.rtc2.ChannelMediaOptions
 import io.agora.rtc2.Constants
 import io.agora.rtc2.IRtcEngineEventHandler
@@ -31,7 +31,7 @@ import io.agora.rtc2.video.VideoCanvas
  * The caller writes the call line into the chat ("Voice call · 2:31", "Missed video call").
  */
 class VoiceCallActivity : AppCompatActivity() {
-    private val me by lazy { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    private val me by lazy { Backend.uid.orEmpty() }
     private val listeners = ListenerBag()
     private val handler = Handler(Looper.getMainLooper())
     private var engine: RtcEngine? = null
