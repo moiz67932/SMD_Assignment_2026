@@ -1,0 +1,2 @@
+<?php
+require_once dirname(__DIR__,2).'/src/bootstrap.php';require_method('GET');$u=current_user();$id=$_GET['id']??'';$q=db()->prepare('SELECT 1 FROM stories WHERE id=? AND owner_id=?');$q->execute([$id,$u['id']]);if(!$q->fetchColumn())json_response(['error'=>['code'=>'forbidden','message'=>'Story unavailable']],403);$q=db()->prepare('SELECT v.viewer_id,v.viewed_at,u.display_name,u.photo_media_id FROM story_views v JOIN users u ON u.id=v.viewer_id WHERE v.story_id=? ORDER BY v.viewed_at');$q->execute([$id]);json_response(['viewers'=>$q->fetchAll()]);

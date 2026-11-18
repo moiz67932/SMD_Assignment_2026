@@ -1,0 +1,2 @@
+<?php
+require_once dirname(__DIR__,2).'/src/actions.php';require_method('POST');$u=current_user();$d=request_json();mutate($u,$d,'story.delete',function($pdo)use($u,$d){$q=$pdo->prepare('UPDATE stories SET deleted_at=COALESCE(deleted_at,UTC_TIMESTAMP(6)) WHERE id=? AND owner_id=?');$q->execute([$d['id']??'',$u['id']]);if(!$q->rowCount())throw new DomainException('Story unavailable');return ['ok'=>true];});
