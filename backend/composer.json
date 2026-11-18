@@ -1,0 +1,7 @@
+{
+  "name": "kinnect/assignment03-api",
+  "description": "Kinnect Assignment 03 PHP/MySQL API",
+  "type": "project",
+  "require": {"php": ">=8.2", "ext-pdo": "*", "ext-pdo_mysql": "*", "ext-fileinfo": "*"},
+  "autoload": {"psr-4": {"Kinnect\\": "src/"}}
+}
